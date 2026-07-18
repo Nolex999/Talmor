@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 
 export default function Home() {
   const router = useRouter();
@@ -47,13 +46,8 @@ export default function Home() {
           <div className="bg-black/60 backdrop-blur-xl rounded-2xl p-8 sm:p-10">
             {/* Logo */}
             <div className="flex justify-center mb-6">
-              <div className="relative w-14 h-14">
-                <Image 
-                  src="/logo.png" 
-                  alt="TALMOR" 
-                  fill
-                  className="object-contain"
-                />
+              <div className="w-14 h-14 rounded-xl border border-white/15 bg-white/[0.03] flex items-center justify-center">
+                <span className="font-display text-xl font-bold tracking-tight">T</span>
               </div>
             </div>
 

@@ -19,10 +19,17 @@
   --font-display: 'Space Grotesk', sans-serif;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* IMPORTANT: this must stay inside @layer base.
+   Un-layered rules always win over Tailwind's utility
+   layer regardless of specificity, so an un-layered
+   "* { margin: 0; padding: 0 }" silently overrides every
+   mb-*, py-*, gap-*, space-y-* class in the project. */
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
 }
 
 body {
