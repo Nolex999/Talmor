@@ -120,15 +120,16 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
 
--- 4. Set n0lex9999@gmail.com as owner
--- This will be done via a one-time SQL insert after the user signs up:
--- UPDATE profiles SET role = 'owner' WHERE id = (SELECT id FROM auth.users WHERE email = 'n0lex9999@gmail.com');
--- For safety, we do it as a DO block that only runs if the user exists
-DO $$
-BEGIN
-  UPDATE profiles SET role = 'owner'
-  WHERE id = (SELECT id FROM auth.users WHERE email = 'n0lex9999@gmail.com');
-END $$;
+-- 4. Backfill profiles for existing users who signed up before the trigger
+INSERT INTO profiles (id, username, role)
+SELECT id, NULL, 'user' FROM auth.users
+WHERE id NOT IN (SELECT id FROM profiles)
+ON CONFLICT (id) DO NOTHING;
+
+-- 5. Set n0lex9999@gmail.com as owner (upsert — creates profile if missing)
+INSERT INTO profiles (id, username, role)
+SELECT id, NULL, 'owner' FROM auth.users WHERE email = 'n0lex9999@gmail.com'
+ON CONFLICT (id) DO UPDATE SET role = 'owner';
 
 -- Generate 10 random invite codes (24 chars, uppercase, no vowels for readability)
 INSERT INTO invite_codes (code)
