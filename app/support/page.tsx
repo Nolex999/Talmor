@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 
@@ -15,7 +14,6 @@ const CATEGORIES = [
 ];
 
 export default function SupportPage() {
-  const router = useRouter();
   const supabase = createClient();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,24 +27,23 @@ export default function SupportPage() {
   useEffect(() => {
     async function getUser() {
       const { data: { user: u } } = await supabase.auth.getUser();
-      if (!u) {
-        router.replace('/');
-        return;
-      }
       setUser(u);
       setLoading(false);
     }
     getUser();
-  }, [supabase, router]);
+  }, [supabase]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
-    router.replace('/');
+    window.location.href = '/';
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      setErrorMsg('Please log in first to submit a ticket.');
+      return;
+    }
     setStatus('sending');
     setErrorMsg('');
 
@@ -108,14 +105,22 @@ export default function SupportPage() {
         <div className="flex items-center justify-between mb-6">
           <img src="/logo.svg" alt="Talmor" className="w-8 h-8 object-contain" />
           <div className="flex items-center gap-4">
-            <span className="text-[11px] text-zinc-500">{user?.email}</span>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="text-[11px] text-zinc-400 hover:text-white transition-colors"
-            >
-              Log out
-            </button>
+            {user ? (
+              <>
+                <span className="text-[11px] text-zinc-500">{user.email}</span>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="text-[11px] text-zinc-400 hover:text-white transition-colors"
+                >
+                  Log out
+                </button>
+              </>
+            ) : (
+              <a href="/" className="text-[11px] text-zinc-400 hover:text-white transition-colors">
+                Log in to submit a ticket
+              </a>
+            )}
           </div>
         </div>
 
