@@ -85,14 +85,13 @@ export default function Home() {
           <div className="bg-black/50 backdrop-blur-xl rounded-2xl p-8 sm:p-10">
             <div className="flex justify-center mb-5">
               {isSubmitting ? (
-                <div className="relative w-20 h-20 animate-logo-pulse">
-                  <div className="absolute inset-0 rounded-full border-2 border-white/10 animate-logo-spin" style={{ borderTopColor: 'rgba(255,255,255,0.4)' }} />
-                  <div className="absolute inset-2 flex items-center justify-center">
-                    <img src="/logo.svg" alt="Talmor" className="w-12 h-12 object-contain opacity-80" />
+                <div className="relative w-24 h-24">
+                  <div className="liquid-logo">
+                    <div className="liquid-wave" />
                   </div>
                 </div>
               ) : (
-                <img src="/logo.svg" alt="Talmor" className="w-16 h-16 object-contain" />
+                <img src="/logo.svg" alt="Talmor" className="w-24 h-24 object-contain" />
               )}
             </div>
 

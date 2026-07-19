@@ -85,10 +85,9 @@ export default function SupportPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0c] text-white bg-grid flex items-center justify-center">
-        <div className="relative w-20 h-20 animate-logo-pulse">
-          <div className="absolute inset-0 rounded-full border-2 border-white/10 animate-logo-spin" style={{ borderTopColor: 'rgba(255,255,255,0.4)' }} />
-          <div className="absolute inset-2 flex items-center justify-center">
-            <img src="/logo.svg" alt="Talmor" className="w-12 h-12 object-contain opacity-80" />
+        <div className="relative w-24 h-24">
+          <div className="liquid-logo">
+            <div className="liquid-wave" />
           </div>
         </div>
       </div>

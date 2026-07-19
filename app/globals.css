@@ -142,3 +142,54 @@ html {
   border-radius: 50%;
   animation: logo-spin 0.6s linear infinite;
 }
+
+.liquid-logo {
+  width: 100%;
+  height: 100%;
+  -webkit-mask-image: url('/logo.svg');
+  mask-image: url('/logo.svg');
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.liquid-wave {
+  position: absolute;
+  bottom: 0;
+  left: -20%;
+  width: 140%;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 40% 45% 0 0;
+  animation: liquid-fill 1.8s ease-in-out infinite;
+}
+
+.liquid-wave::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 0;
+  width: 100%;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  animation: liquid-wobble 1.8s ease-in-out infinite;
+}
+
+@keyframes liquid-fill {
+  0% { height: 0%; }
+  40% { height: 85%; }
+  60% { height: 85%; }
+  100% { height: 0%; }
+}
+
+@keyframes liquid-wobble {
+  0%, 100% { transform: translateX(0) scaleY(1); }
+  25% { transform: translateX(3%) scaleY(1.3); }
+  50% { transform: translateX(-2%) scaleY(0.8); }
+  75% { transform: translateX(2%) scaleY(1.2); }
+}
