@@ -40,7 +40,7 @@ export default function Home() {
           setIsSubmitting(false);
           return;
         }
-        router.push('/support');
+        router.push('/dashboard');
       } else {
         if (!inviteCode.trim()) {
           setError('Invitation code is required.');
@@ -63,7 +63,7 @@ export default function Home() {
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: `${window.location.origin}/support` },
+          options: { emailRedirectTo: `${window.location.origin}/dashboard` },
         });
         if (authError) {
           setError(authError.message === 'User already registered'

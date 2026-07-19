@@ -16,7 +16,10 @@ export const metadata: Metadata = {
   title: "Talmor",
   description: "Sign in to your Talmor account.",
   icons: {
-    icon: "/logo.svg",
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
   },
 };
 
@@ -30,6 +33,9 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
