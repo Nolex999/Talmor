@@ -3,8 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  loadSession,
-  clearSession,
+  getAuthUser,
   getUserProfile,
   upsertUserProfile,
   signOut,
@@ -36,19 +35,24 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    const stored = loadSession();
-    if (!stored) {
-      router.replace('/');
-      return;
-    }
-    setUser(stored);
-    getUserProfile()
-      .then((p) => {
+    let cancelled = false;
+    (async () => {
+      const u = await getAuthUser();
+      if (cancelled) return;
+      if (!u) {
+        router.replace('/');
+        return;
+      }
+      setUser(u);
+      try {
+        const p = await getUserProfile();
+        if (cancelled) return;
         setProfile(p);
         if (p?.username) setUsernameEdit(p.username);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      } catch {}
+      if (!cancelled) setLoading(false);
+    })();
+    return () => { cancelled = true; };
   }, [router]);
 
   async function handleSaveUsername() {

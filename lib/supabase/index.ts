@@ -1,10 +1,7 @@
 import { createClient } from './client';
+import type { User } from '@supabase/supabase-js';
 
-export type AuthUser = {
-  id: string;
-  email?: string;
-  created_at?: string;
-};
+export type AuthUser = User;
 
 export type DbUser = {
   id: string;
@@ -14,29 +11,10 @@ export type DbUser = {
   created_at: string;
 };
 
-const SESSION_KEY = 'talmor_session';
-
-export function loadSession(): AuthUser | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed?.id) return null;
-    return parsed as AuthUser;
-  } catch {
-    return null;
-  }
-}
-
-export function saveSession(user: AuthUser) {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-}
-
-export function clearSession() {
-  if (typeof window === 'undefined') return;
-  localStorage.removeItem(SESSION_KEY);
+export async function getAuthUser(): Promise<AuthUser | null> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
 }
 
 export async function getUserProfile(): Promise<DbUser | null> {
@@ -67,6 +45,5 @@ export async function upsertUserProfile(username: string) {
 
 export async function signOut() {
   const supabase = createClient();
-  clearSession();
   await supabase.auth.signOut();
 }
