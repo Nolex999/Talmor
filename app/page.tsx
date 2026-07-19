@@ -2,75 +2,113 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
+import { createClient } from '@/lib/supabase/client';
 
 export default function Home() {
   const router = useRouter();
+  const supabase = createClient();
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (isSubmitting) return;
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
+
     setIsSubmitting(true);
-    // Placeholder auth — wire this up to your real endpoint.
-    window.setTimeout(() => {
-      router.push('/dashboard');
-    }, 600);
+    setError('');
+
+    try {
+      if (activeTab === 'login') {
+        const { error: authError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (authError) {
+          setError(authError.message === 'Invalid login credentials'
+            ? 'Invalid email or password.'
+            : authError.message);
+          setIsSubmitting(false);
+          return;
+        }
+        router.push('/support');
+      } else {
+        if (!inviteCode.trim()) {
+          setError('Invitation code is required.');
+          setIsSubmitting(false);
+          return;
+        }
+        const { error: authError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: `${window.location.origin}/support` },
+        });
+        if (authError) {
+          setError(authError.message === 'User already registered'
+            ? 'An account with this email already exists.'
+            : authError.message);
+          setIsSubmitting(false);
+          return;
+        }
+        setError('');
+        alert('Check your email to confirm your account.');
+        setActiveTab('login');
+        setIsSubmitting(false);
+      }
+    } catch {
+      setError('Something went wrong. Please try again.');
+      setIsSubmitting(false);
+    }
   }
 
   return (
-    <div className="min-h-screen bg-black text-white bg-grid flex items-center justify-center px-6 py-16 relative overflow-hidden">
-      {/* Ambient Background Effects */}
+    <div className="min-h-screen bg-[#0a0a0c] text-white bg-grid flex items-center justify-center px-6 py-16 relative overflow-hidden">
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-white/10 rounded-full blur-[128px] animate-float" />
+        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-white/[0.03] rounded-full blur-[150px] animate-float" />
         <div
-          className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-white/5 rounded-full blur-[128px] animate-float"
-          style={{ animationDelay: '2s' }}
+          className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-white/[0.02] rounded-full blur-[150px] animate-float"
+          style={{ animationDelay: '3s' }}
         />
       </div>
 
-      <div className="w-full max-w-sm relative z-10">
-        {/* Status pill */}
-        <div className="flex justify-center mb-6">
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/[0.03] text-[10px] tracking-[0.2em] text-zinc-400">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="animate-pulse-glow absolute inline-flex h-full w-full rounded-full bg-white" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
-            </span>
-            SYSTEM ONLINE
-          </div>
-        </div>
-
+      <div className="w-full max-w-md relative z-10">
         <div className="gradient-border">
-          <div className="bg-black/60 backdrop-blur-xl rounded-2xl p-8 sm:p-10">
-            {/* Logo */}
-            <div className="flex justify-center mb-6">
-              <div className="relative w-14 h-14">
-                <Image 
-                  src="/logo.png" 
-                  alt="TALMOR" 
-                  fill
-                  className="object-contain"
-                />
-              </div>
+          <div className="bg-black/50 backdrop-blur-xl rounded-2xl p-8 sm:p-10">
+            <div className="flex justify-center mb-5">
+              {isSubmitting ? (
+                <div className="relative w-20 h-20 animate-logo-pulse">
+                  <div className="absolute inset-0 rounded-full border-2 border-white/10 animate-logo-spin" style={{ borderTopColor: 'rgba(255,255,255,0.4)' }} />
+                  <div className="absolute inset-2 flex items-center justify-center">
+                    <img src="/logo.svg" alt="Talmor" className="w-12 h-12 object-contain opacity-80" />
+                  </div>
+                </div>
+              ) : (
+                <img src="/logo.svg" alt="Talmor" className="w-16 h-16 object-contain" />
+              )}
             </div>
 
             <div className="text-center mb-8">
               <h1 className="font-display text-2xl font-bold mb-1.5 text-white tracking-tight glow-text">
-                TALMOR
+                Talmor
               </h1>
-              <p className="text-zinc-500 text-xs tracking-[0.15em]">
-                ACCESS YOUR SECURE SPACE
+              <p className="text-zinc-500 text-xs">
+                Sign in to your Talmor account to continue.
               </p>
             </div>
 
-            {/* Tabs */}
             <div className="relative flex mb-7 border-b border-white/10">
               <button
                 type="button"
-                onClick={() => setActiveTab('login')}
+                onClick={() => { setActiveTab('login'); setError(''); }}
                 className={`flex-1 pb-3 text-xs font-semibold tracking-wider transition-colors ${
                   activeTab === 'login' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
                 }`}
@@ -79,7 +117,7 @@ export default function Home() {
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab('register')}
+                onClick={() => { setActiveTab('register'); setError(''); }}
                 className={`flex-1 pb-3 text-xs font-semibold tracking-wider transition-colors ${
                   activeTab === 'register' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
                 }`}
@@ -92,19 +130,27 @@ export default function Home() {
               />
             </div>
 
+            {error && (
+              <div className="mb-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs text-center">
+                {error}
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
               <div>
-                <label htmlFor="username" className="block text-[11px] font-medium text-zinc-400 mb-1.5 tracking-wide">
-                  USERNAME
+                <label htmlFor="email" className="block text-[11px] font-medium text-zinc-400 mb-1.5 tracking-wide">
+                  EMAIL
                 </label>
                 <input
-                  id="username"
-                  name="username"
-                  type="text"
+                  id="email"
+                  name="email"
+                  type="email"
                   required
-                  autoComplete="username"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-white/30 focus:bg-white/10 transition-all text-sm text-white placeholder-zinc-600"
-                  placeholder="your_username"
+                  placeholder="you@example.com"
                 />
               </div>
 
@@ -113,14 +159,6 @@ export default function Home() {
                   <label htmlFor="password" className="block text-[11px] font-medium text-zinc-400 tracking-wide">
                     PASSWORD
                   </label>
-                  {activeTab === 'login' && (
-                    <button
-                      type="button"
-                      className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
-                    >
-                      Forgot?
-                    </button>
-                  )}
                 </div>
                 <div className="relative">
                   <input
@@ -129,8 +167,10 @@ export default function Home() {
                     type={showPassword ? 'text' : 'password'}
                     required
                     autoComplete={activeTab === 'login' ? 'current-password' : 'new-password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     className="w-full px-4 py-3 pr-11 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-white/30 focus:bg-white/10 transition-all text-sm text-white placeholder-zinc-600"
-                    placeholder="••••••••"
+                    placeholder="Min. 8 characters"
                   />
                   <button
                     type="button"
@@ -163,6 +203,8 @@ export default function Home() {
                     name="invite"
                     type="text"
                     required
+                    value={inviteCode}
+                    onChange={(e) => setInviteCode(e.target.value)}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-white/30 focus:bg-white/10 transition-all text-sm text-white placeholder-zinc-600"
                     placeholder="XXXX-XXXX-XXXX"
                   />
@@ -193,7 +235,17 @@ export default function Home() {
         </div>
 
         <p className="text-center text-[11px] text-zinc-600 mt-6">
-          Need help? <a href="#" className="text-zinc-400 hover:text-white transition-colors">Contact support</a>
+          Need help?{' '}
+          <a href="/support" className="text-zinc-400 hover:text-white transition-colors">
+            Contact support
+          </a>
+        </p>
+
+        <p className="text-center text-[10px] text-zinc-700 mt-3">
+          By continuing, you agree to our{' '}
+          <a href="/terms" className="text-zinc-500 hover:text-zinc-300 transition-colors underline underline-offset-2">Terms</a>
+          {' '}and{' '}
+          <a href="/privacy" className="text-zinc-500 hover:text-zinc-300 transition-colors underline underline-offset-2">Privacy Policy</a>.
         </p>
       </div>
     </div>

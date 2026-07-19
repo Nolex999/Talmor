@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TALMOR — Secure Access",
-  description: "Access your secure TALMOR space.",
+  title: "Talmor — Secure Access",
+  description: "Sign in to your Talmor account.",
 };
 
 export default function RootLayout({
