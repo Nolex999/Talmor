@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL!;
-
 const MAX_TICKETS_PER_HOUR = 5;
+
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 function sanitizeInput(str: string): string {
   return str
@@ -27,6 +27,9 @@ const CATEGORY_EMOJI: Record<string, string> = {
 
 export async function POST(request: NextRequest) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL!;
+
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'Missing authorization' }, { status: 401 });
