@@ -47,7 +47,20 @@ export default function Home() {
           setIsSubmitting(false);
           return;
         }
-        const { error: authError } = await supabase.auth.signUp({
+
+        const validateRes = await fetch('/api/invite/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: inviteCode }),
+        });
+        const validateData = await validateRes.json();
+        if (!validateData.valid) {
+          setError(validateData.error || 'Invalid invite code.');
+          setIsSubmitting(false);
+          return;
+        }
+
+        const { data: authData, error: authError } = await supabase.auth.signUp({
           email,
           password,
           options: { emailRedirectTo: `${window.location.origin}/support` },
@@ -59,6 +72,15 @@ export default function Home() {
           setIsSubmitting(false);
           return;
         }
+
+        if (authData.user) {
+          await fetch('/api/invite/consume', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: inviteCode, user_id: authData.user.id }),
+          });
+        }
+
         setError('');
         alert('Check your email to confirm your account.');
         setActiveTab('login');
@@ -205,7 +227,7 @@ export default function Home() {
                     value={inviteCode}
                     onChange={(e) => setInviteCode(e.target.value)}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-white/30 focus:bg-white/10 transition-all text-sm text-white placeholder-zinc-600"
-                    placeholder="XXXX-XXXX-XXXX"
+                    placeholder="Your invite code"
                   />
                   <p className="text-[10px] text-zinc-600 mt-2 leading-relaxed text-center">
                     Enter the invitation code provided to you.
