@@ -25,18 +25,16 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  await supabase.auth.getUser();
-
-  const sessionCookie = request.cookies.get('sb-access-token');
+  const { data: { user } } = await supabase.auth.getUser();
   const pathname = request.nextUrl.pathname;
 
-  if (!sessionCookie && pathname.startsWith('/support')) {
+  if (!user && pathname.startsWith('/support')) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     return NextResponse.redirect(url);
   }
 
-  if (sessionCookie && pathname === '/') {
+  if (user && pathname === '/') {
     const url = request.nextUrl.clone();
     url.pathname = '/support';
     return NextResponse.redirect(url);
