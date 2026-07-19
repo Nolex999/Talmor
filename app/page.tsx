@@ -3,21 +3,41 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { signIn, signUp } from '../lib/supabase';
 
 export default function Home() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (isSubmitting) return;
+    setError('');
     setIsSubmitting(true);
-    // Placeholder auth — wire this up to your real endpoint.
-    window.setTimeout(() => {
+
+    const form = new FormData(e.currentTarget as HTMLFormElement);
+    const email = String(form.get('email') || '');
+    const password = String(form.get('password') || '');
+
+    try {
+      if (activeTab === 'login') {
+        await signIn(email, password);
+      } else {
+        const username = String(form.get('username') || '');
+        await signUp(email, password, username);
+      }
       router.push('/dashboard');
-    }, 600);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Something went wrong';
+      if (msg.includes('Invalid login')) setError('Invalid email or password');
+      else if (msg.includes('already')) setError('An account with this email already exists');
+      else setError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -93,35 +113,42 @@ export default function Home() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
+              {activeTab === 'register' && (
+                <div>
+                  <label htmlFor="username" className="block text-[11px] font-medium text-zinc-400 mb-1.5 tracking-wide">
+                    USERNAME
+                  </label>
+                  <input
+                    id="username"
+                    name="username"
+                    type="text"
+                    required
+                    autoComplete="username"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-white/30 focus:bg-white/10 transition-all text-sm text-white placeholder-zinc-600"
+                    placeholder="your_username"
+                  />
+                </div>
+              )}
+
               <div>
-                <label htmlFor="username" className="block text-[11px] font-medium text-zinc-400 mb-1.5 tracking-wide">
-                  USERNAME
+                <label htmlFor="email" className="block text-[11px] font-medium text-zinc-400 mb-1.5 tracking-wide">
+                  EMAIL
                 </label>
                 <input
-                  id="username"
-                  name="username"
-                  type="text"
+                  id="email"
+                  name="email"
+                  type="email"
                   required
-                  autoComplete="username"
+                  autoComplete="email"
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-white/30 focus:bg-white/10 transition-all text-sm text-white placeholder-zinc-600"
-                  placeholder="your_username"
+                  placeholder="you@example.com"
                 />
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label htmlFor="password" className="block text-[11px] font-medium text-zinc-400 tracking-wide">
-                    PASSWORD
-                  </label>
-                  {activeTab === 'login' && (
-                    <button
-                      type="button"
-                      className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
-                    >
-                      Forgot?
-                    </button>
-                  )}
-                </div>
+                <label htmlFor="password" className="block text-[11px] font-medium text-zinc-400 mb-1.5 tracking-wide">
+                  PASSWORD
+                </label>
                 <div className="relative">
                   <input
                     id="password"
@@ -153,23 +180,8 @@ export default function Home() {
                 </div>
               </div>
 
-              {activeTab === 'register' && (
-                <div>
-                  <label htmlFor="invite" className="block text-[11px] font-medium text-zinc-400 mb-1.5 tracking-wide">
-                    INVITATION CODE
-                  </label>
-                  <input
-                    id="invite"
-                    name="invite"
-                    type="text"
-                    required
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-white/30 focus:bg-white/10 transition-all text-sm text-white placeholder-zinc-600"
-                    placeholder="XXXX-XXXX-XXXX"
-                  />
-                  <p className="text-[10px] text-zinc-600 mt-2 leading-relaxed text-center">
-                    Registration reserved for official resellers only.
-                  </p>
-                </div>
+              {error && (
+                <p className="text-[11px] text-red-400 text-center">{error}</p>
               )}
 
               <button
