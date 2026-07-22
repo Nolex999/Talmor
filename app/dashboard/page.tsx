@@ -181,7 +181,7 @@ export default function Dashboard() {
             >
               {t.label}
               {tab === t.id && (
-                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-white" />
+                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#2e7dff] shadow-[0_0_12px_rgba(46,125,255,0.7)]" />
               )}
             </button>
           ))}
@@ -286,7 +286,7 @@ export default function Dashboard() {
                     </div>
                     <a
                       href="#"
-                      className="px-4 py-2 bg-white text-black rounded-lg text-[11px] font-semibold tracking-wider hover:bg-gray-200 transition-colors"
+                      className="btn-primary px-4 py-2 rounded-lg text-[11px] font-semibold tracking-wider"
                     >
                       DOWNLOAD
                     </a>
@@ -316,7 +316,7 @@ export default function Dashboard() {
                   <button
                     onClick={handleSaveUsername}
                     disabled={saving || !usernameEdit.trim()}
-                    className="px-6 py-3 bg-white text-black rounded-lg text-[11px] font-semibold tracking-wider hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                    className="btn-primary px-6 py-3 rounded-lg text-[11px] font-semibold tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {saving ? 'SAVING...' : 'SAVE'}
                   </button>
@@ -361,7 +361,7 @@ export default function Dashboard() {
                   <button
                     onClick={handleGenerateInvites}
                     disabled={generating}
-                    className="px-6 py-3 bg-white text-black rounded-lg text-[11px] font-semibold tracking-wider hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                    className="btn-primary px-6 py-3 rounded-lg text-[11px] font-semibold tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {generating ? 'GENERATING...' : 'GENERATE'}
                   </button>

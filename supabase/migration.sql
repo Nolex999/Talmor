@@ -120,6 +120,75 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
 
+-- 3b. Invite RPCs — single source of truth for invite logic, shared by BOTH
+-- the web app and the Talmor desktop app. SECURITY DEFINER lets them run with
+-- table owner privileges (bypassing the "service role only" RLS above) while
+-- still being safe: they only ever touch invite_codes in a controlled way.
+-- Granted to `anon` so the desktop client can call them with just the anon key
+-- (no service-role key is ever shipped in the desktop binary).
+
+CREATE OR REPLACE FUNCTION public.validate_invite(p_code TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_id   UUID;
+  v_used BOOLEAN;
+BEGIN
+  IF p_code IS NULL OR length(trim(p_code)) < 6 THEN
+    RETURN json_build_object('valid', false, 'error', 'Invalid code format');
+  END IF;
+
+  SELECT id, used INTO v_id, v_used
+  FROM invite_codes WHERE code = upper(trim(p_code));
+
+  IF v_id IS NULL THEN
+    RETURN json_build_object('valid', false, 'error', 'Invalid invite code');
+  ELSIF v_used THEN
+    RETURN json_build_object('valid', false, 'error', 'This invite code has already been used');
+  END IF;
+
+  RETURN json_build_object('valid', true);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.consume_invite(p_code TEXT, p_user_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_id   UUID;
+  v_used BOOLEAN;
+BEGIN
+  SELECT id, used INTO v_id, v_used
+  FROM invite_codes WHERE code = upper(trim(p_code));
+
+  IF v_id IS NULL OR v_used THEN
+    RETURN json_build_object('success', false, 'error', 'Code invalid or already used');
+  END IF;
+
+  -- Atomic guard: only claim the code if it is still unused.
+  UPDATE invite_codes
+  SET used = true, used_by = p_user_id
+  WHERE id = v_id AND used = false;
+
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'Code already used');
+  END IF;
+
+  RETURN json_build_object('success', true);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.validate_invite(TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.consume_invite(TEXT, UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.validate_invite(TEXT) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.consume_invite(TEXT, UUID) TO anon, authenticated;
+
 -- 4. Backfill profiles for existing users who signed up before the trigger
 INSERT INTO profiles (id, username, role)
 SELECT id, NULL, 'user' FROM auth.users

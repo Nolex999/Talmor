@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// Uses the shared `consume_invite` Supabase RPC (atomic single-use burn) so the
+// web app and the Talmor desktop app share one invite-consumption code path.
 function getSupabaseAdmin() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
@@ -17,25 +19,20 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin();
-    const cleanCode = code.trim().toUpperCase();
+    const { data, error } = await supabase.rpc('consume_invite', {
+      p_code: code,
+      p_user_id: user_id,
+    });
 
-    const { data, error } = await supabase
-      .from('invite_codes')
-      .select('id, used')
-      .eq('code', cleanCode)
-      .single();
-
-    if (error || !data || data.used) {
-      return NextResponse.json({ error: 'Code invalid or already used' }, { status: 400 });
+    if (error) {
+      return NextResponse.json({ error: 'Failed to consume code' }, { status: 500 });
     }
 
-    const { error: updateError } = await supabase
-      .from('invite_codes')
-      .update({ used: true, used_by: user_id })
-      .eq('id', data.id);
-
-    if (updateError) {
-      return NextResponse.json({ error: 'Failed to consume code' }, { status: 500 });
+    if (data?.success !== true) {
+      return NextResponse.json(
+        { error: data?.error ?? 'Code invalid or already used' },
+        { status: 400 }
+      );
     }
 
     return NextResponse.json({ success: true });

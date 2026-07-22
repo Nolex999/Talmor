@@ -95,9 +95,9 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#0a0a0c] text-white bg-grid flex items-center justify-center px-6 py-16 relative overflow-hidden">
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-white/[0.03] rounded-full blur-[150px] animate-float" />
+        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-[#2e7dff]/[0.10] rounded-full blur-[150px] animate-float" />
         <div
-          className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-white/[0.02] rounded-full blur-[150px] animate-float"
+          className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-[#1e5fe0]/[0.07] rounded-full blur-[150px] animate-float"
           style={{ animationDelay: '3s' }}
         />
       </div>
@@ -146,7 +146,7 @@ export default function Home() {
                 REGISTER
               </button>
               <span
-                className="absolute bottom-0 h-[2px] w-1/2 bg-white transition-transform duration-300 ease-out"
+                className="absolute bottom-0 h-[2px] w-1/2 bg-[#2e7dff] shadow-[0_0_12px_rgba(46,125,255,0.7)] transition-transform duration-300 ease-out"
                 style={{ transform: activeTab === 'login' ? 'translateX(0%)' : 'translateX(100%)' }}
               />
             </div>
@@ -170,7 +170,7 @@ export default function Home() {
                   autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-white/30 focus:bg-white/10 transition-all text-sm text-white placeholder-zinc-600"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-[#2e7dff]/70 focus:bg-[#2e7dff]/[0.06] transition-all text-sm text-white placeholder-zinc-600"
                   placeholder="you@example.com"
                 />
               </div>
@@ -190,7 +190,7 @@ export default function Home() {
                     autoComplete={activeTab === 'login' ? 'current-password' : 'new-password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-3 pr-11 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-white/30 focus:bg-white/10 transition-all text-sm text-white placeholder-zinc-600"
+                    className="w-full px-4 py-3 pr-11 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-[#2e7dff]/70 focus:bg-[#2e7dff]/[0.06] transition-all text-sm text-white placeholder-zinc-600"
                     placeholder="Min. 8 characters"
                   />
                   <button
@@ -226,7 +226,7 @@ export default function Home() {
                     required
                     value={inviteCode}
                     onChange={(e) => setInviteCode(e.target.value)}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-white/30 focus:bg-white/10 transition-all text-sm text-white placeholder-zinc-600"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-[#2e7dff]/70 focus:bg-[#2e7dff]/[0.06] transition-all text-sm text-white placeholder-zinc-600"
                     placeholder="Your invite code"
                   />
                   <p className="text-[10px] text-zinc-600 mt-2 leading-relaxed text-center">
@@ -238,11 +238,11 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full py-3 bg-white text-black rounded-lg font-semibold text-xs tracking-wider transition-all hover:bg-gray-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="btn-primary w-full py-3 rounded-lg font-semibold text-xs tracking-wider disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
                   <>
-                    <span className="h-3.5 w-3.5 rounded-full border-2 border-black/30 border-t-black animate-spin" />
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />
                     {activeTab === 'login' ? 'LOGGING IN' : 'CREATING ACCOUNT'}
                   </>
                 ) : activeTab === 'login' ? (

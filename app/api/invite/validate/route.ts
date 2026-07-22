@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// Uses the shared `validate_invite` Supabase RPC so the web app and the Talmor
+// desktop app enforce identical invite rules from a single source of truth.
 function getSupabaseAdmin() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
@@ -16,29 +18,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ valid: false, error: 'No code provided' }, { status: 400 });
     }
 
-    const cleanCode = code.trim().toUpperCase();
-
-    if (cleanCode.length < 6 || cleanCode.length > 30) {
-      return NextResponse.json({ valid: false, error: 'Invalid code format' }, { status: 400 });
-    }
-
     const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase.rpc('validate_invite', { p_code: code });
 
-    const { data, error } = await supabase
-      .from('invite_codes')
-      .select('id, used')
-      .eq('code', cleanCode)
-      .single();
-
-    if (error || !data) {
-      return NextResponse.json({ valid: false, error: 'Invalid invite code' }, { status: 404 });
+    if (error) {
+      return NextResponse.json({ valid: false, error: 'Internal server error' }, { status: 500 });
     }
 
-    if (data.used) {
-      return NextResponse.json({ valid: false, error: 'This invite code has already been used' }, { status: 410 });
-    }
-
-    return NextResponse.json({ valid: true });
+    const valid = data?.valid === true;
+    return NextResponse.json(
+      { valid, error: valid ? undefined : (data?.error ?? 'Invalid invite code') },
+      { status: valid ? 200 : 400 }
+    );
   } catch {
     return NextResponse.json({ valid: false, error: 'Internal server error' }, { status: 500 });
   }

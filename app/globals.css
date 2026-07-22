@@ -3,13 +3,15 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a0a0c;
-  --foreground: #ffffff;
-  --accent: #ffffff;
-  --accent-secondary: #888888;
-  --accent-glow: rgba(255, 255, 255, 0.15);
-  --border: rgba(255, 255, 255, 0.06);
-  --card-bg: rgba(255, 255, 255, 0.025);
+  --background: #0a0b0e;
+  --foreground: #eaecef;
+  --accent: #2e7dff;
+  --accent-hover: #4c93ff;
+  --accent-deep: #1e5fe0;
+  --accent-secondary: #8a909b;
+  --accent-glow: rgba(46, 125, 255, 0.35);
+  --border: rgba(120, 150, 220, 0.1);
+  --card-bg: rgba(46, 125, 255, 0.03);
 }
 
 @theme inline {
@@ -39,14 +41,29 @@ html {
 }
 
 .glow-text {
-  text-shadow: 0 0 40px var(--accent-glow), 0 0 80px rgba(255, 255, 255, 0.08);
+  text-shadow: 0 0 40px var(--accent-glow), 0 0 80px rgba(46, 125, 255, 0.12);
 }
 
 .gradient-text {
-  background: linear-gradient(135deg, #ffffff 0%, #888888 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #4c93ff 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+/* Primary electric-blue call-to-action */
+.btn-primary {
+  background: linear-gradient(135deg, #4c93ff 0%, #2e7dff 50%, #1e5fe0 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 24px rgba(46, 125, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: box-shadow 0.2s ease, transform 0.1s ease, filter 0.2s ease;
+}
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 6px 32px rgba(46, 125, 255, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  filter: brightness(1.08);
+}
+.btn-primary:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .gradient-border {
@@ -61,7 +78,7 @@ html {
   inset: 0;
   border-radius: 16px;
   padding: 1px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(136, 136, 136, 0.08));
+  background: linear-gradient(135deg, rgba(76, 147, 255, 0.35), rgba(46, 125, 255, 0.08));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
