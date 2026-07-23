@@ -13,13 +13,19 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Talmor",
+  title: {
+    default: "Talmor",
+    template: "%s | Talmor",
+  },
+  applicationName: "Talmor",
   description: "Sign in to your Talmor account.",
   icons: {
     icon: [
-      { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.ico?v=2", sizes: "any" },
+      { url: "/logo.png?v=2", type: "image/png", sizes: "1024x1024" },
     ],
+    shortcut: "/favicon.ico?v=2",
+    apple: "/logo.png?v=2",
   },
 };
 
@@ -33,9 +39,6 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <head>
-        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

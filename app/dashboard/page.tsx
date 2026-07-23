@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   getAuthUser,
   getUserProfile,
-  upsertUserProfile,
+  updateUserProfile,
   signOut,
   type AuthUser,
   type DbUser,
@@ -26,6 +26,7 @@ export default function Dashboard() {
   const [inviteCount, setInviteCount] = useState(1);
   const [generatedCodes, setGeneratedCodes] = useState<{ code: string; created_at: string }[]>([]);
   const [generating, setGenerating] = useState(false);
+  const [generatingKey, setGeneratingKey] = useState(false);
 
   const isAdmin = profile?.role === 'owner' || profile?.role === 'admin';
 
@@ -49,6 +50,7 @@ export default function Dashboard() {
         if (cancelled) return;
         setProfile(p);
         if (p?.username) setUsernameEdit(p.username);
+        if (p && !p.license_key) setTab('keys');
       } catch {}
       if (!cancelled) setLoading(false);
     })();
@@ -59,7 +61,7 @@ export default function Dashboard() {
     if (!usernameEdit.trim()) return;
     setSaving(true);
     try {
-      await upsertUserProfile(usernameEdit.trim());
+      await updateUserProfile(usernameEdit.trim());
       setProfile((prev) => (prev ? { ...prev, username: usernameEdit.trim() } : prev));
       showToast('Username saved');
     } catch {
@@ -72,6 +74,24 @@ export default function Dashboard() {
   async function handleLogout() {
     await signOut();
     router.replace('/');
+  }
+
+  async function handleGenerateKey() {
+    setGeneratingKey(true);
+    try {
+      const supabase = (await import('../../lib/supabase/client')).createClient();
+      const { data, error } = await supabase.rpc('generate_activation_key');
+      if (error || !data?.success) {
+        showToast(data?.error || 'Failed to generate key');
+        return;
+      }
+      setProfile((prev) => (prev ? { ...prev, license_key: data.key } : prev));
+      showToast(data.existing ? 'Your existing key' : 'Activation key generated');
+    } catch {
+      showToast('Network error');
+    } finally {
+      setGeneratingKey(false);
+    }
   }
 
   async function handleGenerateInvites() {
@@ -218,7 +238,7 @@ export default function Dashboard() {
 
             <div className="gradient-border">
               <div className="bg-black/60 backdrop-blur-xl rounded-2xl p-6">
-                <h2 className="text-xs font-semibold tracking-wider text-zinc-400 mb-4">LICENSE STATUS</h2>
+                <h2 className="text-xs font-semibold tracking-wider text-zinc-400 mb-4">ACTIVATION STATUS</h2>
                 <div className="flex items-center gap-3">
                   <span
                     className={`h-2 w-2 rounded-full ${
@@ -226,7 +246,7 @@ export default function Dashboard() {
                     }`}
                   />
                   <p className="text-sm text-white">
-                    {profile?.license_key ?? 'No license key assigned'}
+                    {profile?.license_key ? 'Activation key ready' : 'No activation key generated'}
                   </p>
                 </div>
                 {profile?.license_key && (
@@ -242,7 +262,7 @@ export default function Dashboard() {
         {tab === 'keys' && (
           <div className="gradient-border">
             <div className="bg-black/60 backdrop-blur-xl rounded-2xl p-6">
-              <h2 className="text-xs font-semibold tracking-wider text-zinc-400 mb-4">YOUR LICENSE KEY</h2>
+              <h2 className="text-xs font-semibold tracking-wider text-zinc-400 mb-4">YOUR ACTIVATION KEY</h2>
               {profile?.license_key ? (
                 <div className="space-y-4">
                   <div className="px-4 py-3 rounded-lg bg-white/[0.03] border border-white/10 font-mono text-sm text-white tracking-wider flex items-center justify-between">
@@ -258,14 +278,21 @@ export default function Dashboard() {
                     </button>
                   </div>
                   <p className="text-[11px] text-zinc-600">
-                    Enter this key in the Talmor executor to activate your license.
+                    After signing in to the Talmor app, enter this key to activate. Keep it private — it&apos;s tied to your account.
                   </p>
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <p className="text-sm text-zinc-500 mb-3">No license key assigned yet.</p>
-                  <p className="text-[11px] text-zinc-600">
-                    Contact an administrator to receive your key.
+                  <p className="text-sm text-zinc-500 mb-4">You haven&apos;t generated an activation key yet.</p>
+                  <button
+                    onClick={handleGenerateKey}
+                    disabled={generatingKey}
+                    className="btn-primary px-6 py-3 rounded-lg text-[11px] font-semibold tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {generatingKey ? 'GENERATING...' : 'GENERATE ACTIVATION KEY'}
+                  </button>
+                  <p className="text-[11px] text-zinc-600 mt-4">
+                    Required to sign in to the Talmor desktop app.
                   </p>
                 </div>
               )}

@@ -60,10 +60,13 @@ export default function Home() {
           return;
         }
 
-        const { data: authData, error: authError } = await supabase.auth.signUp({
+        const { error: authError } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: `${window.location.origin}/dashboard` },
+          options: {
+            emailRedirectTo: `${window.location.origin}/dashboard`,
+            data: { invite_code: inviteCode.trim().toUpperCase() },
+          },
         });
         if (authError) {
           setError(authError.message === 'User already registered'
@@ -73,16 +76,8 @@ export default function Home() {
           return;
         }
 
-        if (authData.user) {
-          await fetch('/api/invite/consume', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code: inviteCode, user_id: authData.user.id }),
-          });
-        }
-
         setError('');
-        alert('Check your email to confirm your account.');
+        alert('Account created. Confirm your email, then sign in to generate your desktop activation key.');
         setActiveTab('login');
         setIsSubmitting(false);
       }

@@ -31,14 +31,15 @@ export async function getUserProfile(): Promise<DbUser | null> {
   return data as DbUser | null;
 }
 
-export async function upsertUserProfile(username: string) {
+export async function updateUserProfile(username: string) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
   const { error } = await supabase
     .from('profiles')
-    .upsert({ id: user.id, username }, { onConflict: 'id' });
+    .update({ username })
+    .eq('id', user.id);
 
   if (error) throw error;
 }

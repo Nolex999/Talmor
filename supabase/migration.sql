@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS profiles (
   created_at  TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
+-- CREATE TABLE IF NOT EXISTS does not add new columns to an older table.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS license_key TEXT;
+
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
@@ -39,6 +42,14 @@ DO $$ BEGIN
     ON profiles FOR ALL USING (auth.role() = 'service_role');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+
+-- RLS limits rows, not columns. Without column grants, users could update
+-- their own role to owner or choose their own activation key. Only username
+-- is client-editable; trusted SECURITY DEFINER functions manage license_key.
+REVOKE INSERT, UPDATE ON TABLE profiles FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE profiles TO authenticated;
+GRANT INSERT (id, username) ON TABLE profiles TO authenticated;
+GRANT UPDATE (username) ON TABLE profiles TO authenticated;
 
 -- Auto-create profile on signup via trigger
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -120,12 +131,44 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
 
--- 3b. Invite RPCs — single source of truth for invite logic, shared by BOTH
--- the web app and the Talmor desktop app. SECURITY DEFINER lets them run with
--- table owner privileges (bypassing the "service role only" RLS above) while
--- still being safe: they only ever touch invite_codes in a controlled way.
--- Granted to `anon` so the desktop client can call them with just the anon key
--- (no service-role key is ever shipped in the desktop binary).
+-- Replace the bootstrap profile trigger with the complete registration
+-- transaction. The invite is claimed in the SAME transaction as auth.users,
+-- so a race cannot create an account without consuming a valid invite.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_invite TEXT := upper(trim(COALESCE(NEW.raw_user_meta_data->>'invite_code', '')));
+BEGIN
+  IF length(v_invite) < 6 THEN
+    RAISE EXCEPTION 'Invitation code is required';
+  END IF;
+
+  UPDATE invite_codes
+  SET used = true, used_by = NEW.id
+  WHERE code = v_invite AND used = false;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Invitation code is invalid or already used';
+  END IF;
+
+  INSERT INTO profiles (id, username, role)
+  VALUES (
+    NEW.id,
+    NULLIF(trim(COALESCE(NEW.raw_user_meta_data->>'username', '')), ''),
+    'user'
+  )
+  ON CONFLICT (id) DO NOTHING;
+
+  RETURN NEW;
+END;
+$$;
+
+-- 3b. Invite validation RPC. Consumption is intentionally not exposed as a
+-- client RPC; handle_new_user claims the invite atomically during signup.
 
 CREATE OR REPLACE FUNCTION public.validate_invite(p_code TEXT)
 RETURNS JSON
@@ -154,40 +197,103 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.consume_invite(p_code TEXT, p_user_id UUID)
+REVOKE ALL ON FUNCTION public.validate_invite(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.validate_invite(TEXT) TO anon, authenticated;
+
+-- Remove the old unauthenticated consume endpoint on existing deployments.
+DROP FUNCTION IF EXISTS public.consume_invite(TEXT, UUID);
+
+-- 3c. Activation keys — every user generates their OWN activation key on the
+-- website. The desktop app requires it as a second step after email/password
+-- login. The key is stored in profiles.license_key. Format: 16-char base36
+-- (lowercase a-z + 0-9), e.g. 0fx3dfc49g384vm3.
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_license_key
+ON profiles (license_key)
+WHERE license_key IS NOT NULL AND license_key <> '';
+
+CREATE OR REPLACE FUNCTION public.generate_activation_key()
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_id   UUID;
-  v_used BOOLEAN;
+  v_uid      UUID := auth.uid();
+  v_existing TEXT;
+  v_key      TEXT := '';
+  v_alphabet TEXT := '0123456789abcdefghijklmnopqrstuvwxyz';
+  v_bytes    BYTEA := uuid_send(gen_random_uuid());
+  i          INT;
 BEGIN
-  SELECT id, used INTO v_id, v_used
-  FROM invite_codes WHERE code = upper(trim(p_code));
-
-  IF v_id IS NULL OR v_used THEN
-    RETURN json_build_object('success', false, 'error', 'Code invalid or already used');
+  IF v_uid IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Not authenticated');
   END IF;
 
-  -- Atomic guard: only claim the code if it is still unused.
-  UPDATE invite_codes
-  SET used = true, used_by = p_user_id
-  WHERE id = v_id AND used = false;
+  -- The signup trigger normally creates this row. The upsert makes the RPC
+  -- resilient for accounts created before that trigger existed.
+  INSERT INTO profiles (id) VALUES (v_uid) ON CONFLICT (id) DO NOTHING;
 
-  IF NOT FOUND THEN
-    RETURN json_build_object('success', false, 'error', 'Code already used');
+  -- Lock the row so two simultaneous requests cannot return different keys.
+  SELECT license_key INTO v_existing
+  FROM profiles
+  WHERE id = v_uid
+  FOR UPDATE;
+  IF v_existing IS NOT NULL AND length(v_existing) > 0 THEN
+    RETURN json_build_object('success', true, 'key', v_existing, 'existing', true);
   END IF;
 
-  RETURN json_build_object('success', true);
+  FOR i IN 0..15 LOOP
+    v_key := v_key || substr(v_alphabet, 1 + (get_byte(v_bytes, i) % 36), 1);
+  END LOOP;
+
+  UPDATE profiles SET license_key = v_key WHERE id = v_uid;
+  RETURN json_build_object('success', true, 'key', v_key, 'existing', false);
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.validate_invite(TEXT) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.consume_invite(TEXT, UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.validate_invite(TEXT) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.consume_invite(TEXT, UUID) TO anon, authenticated;
+-- Remove the earlier user-id-taking signature if this migration was already
+-- run. Validation must always target the currently authenticated user.
+DROP FUNCTION IF EXISTS public.validate_activation_key(UUID, TEXT);
+
+CREATE OR REPLACE FUNCTION public.validate_activation_key(p_key TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_key TEXT;
+BEGIN
+  IF v_uid IS NULL THEN
+    RETURN json_build_object('valid', false, 'error', 'Not authenticated');
+  END IF;
+
+  IF p_key IS NULL OR trim(p_key) !~ '^[0-9A-Za-z]{16}$' THEN
+    RETURN json_build_object('valid', false,
+      'error', 'Activation keys must be 16 letters or numbers');
+  END IF;
+
+  SELECT license_key INTO v_key FROM profiles WHERE id = v_uid;
+
+  IF v_key IS NULL OR length(v_key) = 0 THEN
+    RETURN json_build_object('valid', false,
+      'error', 'No activation key found. Generate one on the Talmor website first.');
+  END IF;
+
+  IF lower(trim(p_key)) = lower(v_key) THEN
+    RETURN json_build_object('valid', true);
+  END IF;
+
+  RETURN json_build_object('valid', false, 'error', 'Incorrect activation key');
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.generate_activation_key() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.validate_activation_key(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.generate_activation_key() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.validate_activation_key(TEXT) TO authenticated;
 
 -- 4. Backfill profiles for existing users who signed up before the trigger
 INSERT INTO profiles (id, username, role)
