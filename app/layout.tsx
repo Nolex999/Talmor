@@ -1,31 +1,21 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: {
-    default: "Talmor",
+    default: "Talmor — Free Luau executor",
     template: "%s | Talmor",
   },
   applicationName: "Talmor",
-  description: "Sign in to your Talmor account.",
+  description:
+    "Talmor is free. Fast Luau scripting for Roblox. Optional RakNet networking unlock via Work.ink / LootLabs.",
   icons: {
     icon: [
-      { url: "/favicon.ico?v=2", sizes: "any" },
-      { url: "/logo.png?v=2", type: "image/png", sizes: "1024x1024" },
+      { url: "/favicon.ico?v=3", sizes: "any" },
+      { url: "/logo.png?v=3", type: "image/png", sizes: "1024x1024" },
     ],
-    shortcut: "/favicon.ico?v=2",
-    apple: "/logo.png?v=2",
+    shortcut: "/favicon.ico?v=3",
+    apple: "/logo.png?v=3",
   },
 };
 
@@ -35,11 +25,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" className="h-full antialiased">
+      <body className="min-h-full flex flex-col font-sans">{children}</body>
     </html>
   );
 }

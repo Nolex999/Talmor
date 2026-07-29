@@ -8,6 +8,7 @@ export type DbUser = {
   username: string | null;
   role: 'owner' | 'admin' | 'user';
   license_key: string | null;
+  raknet_unlocked?: boolean | null;
   created_at: string;
 };
 

@@ -41,7 +41,7 @@ export default function Dashboard() {
       const u = await getAuthUser();
       if (cancelled) return;
       if (!u) {
-        router.replace('/');
+        router.replace('/login');
         return;
       }
       setUser(u);
@@ -233,6 +233,19 @@ export default function Dashboard() {
                     </p>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="gradient-border">
+              <div className="bg-black/60 backdrop-blur-xl rounded-2xl p-6">
+                <h2 className="text-xs font-semibold tracking-wider text-zinc-400 mb-4">PLAN</h2>
+                <p className="text-sm text-white mb-2">Talmor Core — <span className="text-emerald-400">Free</span></p>
+                <p className="text-xs text-zinc-500 mb-4">
+                  RakNet networking is optional. Unlock via Work.ink / LootLabs, then redeem your code.
+                </p>
+                <a href="/raknet" className="btn-primary inline-flex px-4 py-2 text-xs">
+                  {profile?.raknet_unlocked ? 'RakNet unlocked →' : 'Unlock RakNet →'}
+                </a>
               </div>
             </div>
 

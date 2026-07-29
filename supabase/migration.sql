@@ -131,9 +131,8 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
 
--- Replace the bootstrap profile trigger with the complete registration
--- transaction. The invite is claimed in the SAME transaction as auth.users,
--- so a race cannot create an account without consuming a valid invite.
+-- Replace the bootstrap profile trigger with open (free) registration.
+-- Invite codes remain optional for admin soft-launches; they are no longer required.
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -143,23 +142,19 @@ AS $$
 DECLARE
   v_invite TEXT := upper(trim(COALESCE(NEW.raw_user_meta_data->>'invite_code', '')));
 BEGIN
-  IF length(v_invite) < 6 THEN
-    RAISE EXCEPTION 'Invitation code is required';
+  IF length(v_invite) >= 6 THEN
+    UPDATE invite_codes
+    SET used = true, used_by = NEW.id
+    WHERE code = v_invite AND used = false;
+    -- Invalid invite is ignored for free signup (does not block account creation).
   END IF;
 
-  UPDATE invite_codes
-  SET used = true, used_by = NEW.id
-  WHERE code = v_invite AND used = false;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Invitation code is invalid or already used';
-  END IF;
-
-  INSERT INTO profiles (id, username, role)
+  INSERT INTO profiles (id, username, role, raknet_unlocked)
   VALUES (
     NEW.id,
     NULLIF(trim(COALESCE(NEW.raw_user_meta_data->>'username', '')), ''),
-    'user'
+    'user',
+    false
   )
   ON CONFLICT (id) DO NOTHING;
 
@@ -315,3 +310,96 @@ SELECT upper(substring(
 1, 24))
 FROM generate_series(1, 10)
 ON CONFLICT DO NOTHING;
+
+-- =============================================================
+-- 6. Free core + optional RakNet unlock (Work.ink / LootLabs)
+-- =============================================================
+
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS raknet_unlocked BOOLEAN NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS raknet_unlock_codes (
+  id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  code        TEXT NOT NULL UNIQUE,
+  used        BOOLEAN NOT NULL DEFAULT false,
+  used_by     UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  note        TEXT
+);
+
+ALTER TABLE raknet_unlock_codes ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  CREATE POLICY "Service role raknet codes"
+    ON raknet_unlock_codes FOR ALL USING (auth.role() = 'service_role');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.redeem_raknet_code(p_code TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_id  UUID;
+BEGIN
+  IF v_uid IS NULL THEN
+    RETURN json_build_object('ok', false, 'error', 'Not authenticated');
+  END IF;
+
+  IF p_code IS NULL OR length(trim(p_code)) < 6 THEN
+    RETURN json_build_object('ok', false, 'error', 'Invalid unlock code');
+  END IF;
+
+  INSERT INTO profiles (id, raknet_unlocked) VALUES (v_uid, false)
+  ON CONFLICT (id) DO NOTHING;
+
+  IF EXISTS (SELECT 1 FROM profiles WHERE id = v_uid AND raknet_unlocked = true) THEN
+    RETURN json_build_object('ok', true, 'already', true);
+  END IF;
+
+  UPDATE raknet_unlock_codes
+  SET used = true, used_by = v_uid
+  WHERE upper(trim(code)) = upper(trim(p_code)) AND used = false
+  RETURNING id INTO v_id;
+
+  IF v_id IS NULL THEN
+    RETURN json_build_object('ok', false, 'error', 'Code invalid or already used');
+  END IF;
+
+  UPDATE profiles SET raknet_unlocked = true WHERE id = v_uid;
+  RETURN json_build_object('ok', true);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_raknet_status()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_on  BOOLEAN;
+BEGIN
+  IF v_uid IS NULL THEN
+    RETURN json_build_object('unlocked', false);
+  END IF;
+  SELECT COALESCE(raknet_unlocked, false) INTO v_on FROM profiles WHERE id = v_uid;
+  RETURN json_build_object('unlocked', COALESCE(v_on, false));
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.redeem_raknet_code(TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.get_raknet_status() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.redeem_raknet_code(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_raknet_status() TO authenticated;
+
+-- Seed a few demo unlock codes (replace in production / generate via admin)
+INSERT INTO raknet_unlock_codes (code, note)
+VALUES
+  ('RAKNET-DEMO-0001', 'seed'),
+  ('RAKNET-DEMO-0002', 'seed'),
+  ('RAKNET-DEMO-0003', 'seed')
+ON CONFLICT (code) DO NOTHING;
