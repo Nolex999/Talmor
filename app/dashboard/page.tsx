@@ -33,6 +33,7 @@ export default function Dashboard() {
   const [usernameEdit, setUsernameEdit] = useState('');
   const [saving, setSaving] = useState(false);
   const [generatingKey, setGeneratingKey] = useState(false);
+  const [plusLinks, setPlusLinks] = useState<{ workink: string; lootlabs: string } | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -62,6 +63,23 @@ export default function Dashboard() {
           setView('key');
         }
       } catch {}
+      if (!cancelled && u) {
+        // Fetch unlock links
+        try {
+          const [wRes, lRes] = await Promise.all([
+            fetch('/api/plus/link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uid: u.id, source: 'workink' }) }),
+            fetch('/api/plus/link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uid: u.id, source: 'lootlabs' }) }),
+          ]);
+          const wData = await wRes.json();
+          const lData = await lRes.json();
+          if (!cancelled) {
+            setPlusLinks({
+              workink: wData.url || `${(process.env.NEXT_PUBLIC_WORKINK_URL || 'https://work.ink/talmor-plus')}?ref=${u.id.slice(0, 8)}`,
+              lootlabs: lData.url || `${(process.env.NEXT_PUBLIC_LOOTLABS_URL || 'https://lootlabs.gg/talmor-plus')}?ref=${u.id.slice(0, 8)}`,
+            });
+          }
+        } catch {}
+      }
       if (!cancelled) setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -310,7 +328,7 @@ export default function Dashboard() {
             ) : (
               <div className="space-y-3">
                 <a
-                  href={user ? `${(process.env.NEXT_PUBLIC_WORKINK_URL || 'https://work.ink/talmor-plus')}?ref=${user.id?.slice(0, 8)}` : '/login'}
+                  href={user ? (plusLinks?.workink || `${(process.env.NEXT_PUBLIC_WORKINK_URL || 'https://work.ink/talmor-plus')}?ref=${user.id?.slice(0, 8)}`) : '/login'}
                   target="_blank" rel="noreferrer"
                   className="flex items-center justify-between rounded-xl border border-zinc-900 bg-zinc-900/20 p-4 hover:border-[#7A9E7E]/30 hover:bg-[#7A9E7E]/5 transition-all group"
                 >
@@ -321,7 +339,7 @@ export default function Dashboard() {
                   <span className="text-sm text-[#7A9E7E] group-hover:translate-x-1 transition-transform">&#8594;</span>
                 </a>
                 <a
-                  href={user ? `${(process.env.NEXT_PUBLIC_LOOTLABS_URL || 'https://lootlabs.gg/talmor-plus')}?ref=${user.id?.slice(0, 8)}` : '/login'}
+                  href={user ? (plusLinks?.lootlabs || `${(process.env.NEXT_PUBLIC_LOOTLABS_URL || 'https://lootlabs.gg/talmor-plus')}?ref=${user.id?.slice(0, 8)}`) : '/login'}
                   target="_blank" rel="noreferrer"
                   className="flex items-center justify-between rounded-xl border border-zinc-900 bg-zinc-900/20 p-4 hover:border-[#7A9E7E]/30 hover:bg-[#7A9E7E]/5 transition-all group"
                 >

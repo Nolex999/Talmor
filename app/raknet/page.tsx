@@ -40,28 +40,30 @@ export default function RakNetPage() {
 
   async function redeem() {
     if (!code.trim()) {
-      setStatus('Enter your unlock code.');
+      setStatus('Enter your unlock token.');
       return;
     }
     setBusy(true);
     setStatus('');
     try {
-      const { data, error } = await supabase.rpc('redeem_raknet_code', {
-        p_code: code.trim().toUpperCase(),
+      const res = await fetch('/api/plus/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: code.trim(),
+          uid: user?.id,
+          source: 'workink',
+        }),
       });
-      if (error) {
-        setStatus(error.message);
-      } else if (data?.ok || data?.valid || data === true) {
+      const data = await res.json();
+      if (data.ok) {
         setUnlocked(true);
         setStatus('Talmor Plus unlocked!');
-      } else if (typeof data === 'object' && data !== null && 'error' in data) {
-        setStatus(String((data as { error?: string }).error || 'Redeem failed'));
       } else {
-        setStatus('Code redeemed.');
-        setUnlocked(true);
+        setStatus(data.error || 'Token invalid or expired');
       }
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : 'Redeem failed');
+      setStatus(e instanceof Error ? e.message : 'Verification failed');
     } finally {
       setBusy(false);
     }
@@ -119,18 +121,18 @@ export default function RakNetPage() {
             </div>
 
             <div className="mt-8 rounded-xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-xl p-5">
-              <h2 className="text-sm font-semibold text-white">Redeem code</h2>
+              <h2 className="text-sm font-semibold text-white">Redeem token</h2>
               <p className="mt-1 text-xs text-zinc-500">
                 {user
-                  ? 'Paste the code you received after completing the offer.'
-                  : 'Sign in first, then redeem the code on this account.'}
+                  ? 'Paste the token you received on Work.ink after completing the offer.'
+                  : 'Sign in first, then redeem the token on this account.'}
               </p>
               {user ? (
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <input
                     value={code}
                     onChange={(e) => setCode(e.target.value)}
-                    placeholder="Enter your unlock code"
+                    placeholder="Paste your Work.ink token"
                     className="flex-1 rounded-lg border border-zinc-900 bg-black px-3 py-2.5 font-mono text-sm outline-none focus:border-[#7A9E7E] text-white placeholder-zinc-600"
                   />
                   <button
