@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import { Suspense } from 'react';
 
@@ -58,7 +59,7 @@ function LoginForm() {
           setIsSubmitting(false);
           return;
         }
-        setInfo('Account created. Confirm your email, then sign in. Talmor core is free.');
+        setInfo('Account created. Confirm your email, then sign in.');
         setActiveTab('login');
         setIsSubmitting(false);
       }
@@ -75,7 +76,6 @@ function LoginForm() {
 
   return (
     <div className="min-h-screen bg-black text-zinc-100 flex flex-col">
-      {/* Animated background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full opacity-[0.03]"
           style={{ background: 'radial-gradient(circle, #7A9E7E 0%, transparent 70%)', animation: 'float 8s ease-in-out infinite' }}
@@ -83,14 +83,10 @@ function LoginForm() {
       </div>
 
       <header className="site-nav relative z-50">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-5">
-          <Link href="/" className="flex items-center gap-2.5 font-semibold text-white">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7A9E7E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
-            </svg>
-            Talmor
+        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-5">
+          <Link href="/" className="flex items-center gap-3 font-semibold text-white">
+            <Image src="/logo.svg" alt="Talmor" width={32} height={32} />
+            <span className="text-base">Talmor</span>
           </Link>
           <Link href="/" className="text-sm text-zinc-500 hover:text-white transition-colors">&larr; Back</Link>
         </div>

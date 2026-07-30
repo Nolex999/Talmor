@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 
 const WORKINK_URL = process.env.NEXT_PUBLIC_WORKINK_URL || 'https://work.ink/talmor-plus';
@@ -39,7 +40,7 @@ export default function RakNetPage() {
 
   async function redeem() {
     if (!code.trim()) {
-      setStatus('Enter the unlock code from Work.ink or LootLabs.');
+      setStatus('Enter your unlock code.');
       return;
     }
     setBusy(true);
@@ -52,7 +53,7 @@ export default function RakNetPage() {
         setStatus(error.message);
       } else if (data?.ok || data?.valid || data === true) {
         setUnlocked(true);
-        setStatus('Talmor Plus unlocked! Enable it in the app settings.');
+        setStatus('Talmor Plus unlocked!');
       } else if (typeof data === 'object' && data !== null && 'error' in data) {
         setStatus(String((data as { error?: string }).error || 'Redeem failed'));
       } else {
@@ -68,7 +69,6 @@ export default function RakNetPage() {
 
   return (
     <div className="min-h-screen bg-black text-zinc-100">
-      {/* Animated background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full opacity-[0.03]"
           style={{ background: 'radial-gradient(circle, #7A9E7E 0%, transparent 70%)', animation: 'float 8s ease-in-out infinite' }}
@@ -76,14 +76,10 @@ export default function RakNetPage() {
       </div>
 
       <header className="site-nav sticky top-0 z-40 relative">
-        <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-5">
-          <Link href="/" className="flex items-center gap-2.5 font-semibold text-white">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7A9E7E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
-            </svg>
-            Talmor
+        <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-5">
+          <Link href="/" className="flex items-center gap-3 font-semibold text-white">
+            <Image src="/logo.svg" alt="Talmor" width={28} height={28} />
+            <span>Talmor</span>
           </Link>
           <Link href="/dashboard" className="text-sm text-zinc-500 hover:text-white transition-colors">Dashboard</Link>
         </div>
@@ -93,13 +89,13 @@ export default function RakNetPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7A9E7E]">Talmor Plus</p>
         <h1 className="mt-3 text-3xl font-semibold text-white">Premium unlock</h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-500">
-          Talmor core stays free. Plus is an optional upgrade for premium download access.
           Complete a short Work.ink or LootLabs offer, then redeem the code here.
+          Your code is automatically linked to your account.
         </p>
 
         {unlocked ? (
           <div className="mt-8 rounded-xl border border-[#7A9E7E]/30 bg-[#7A9E7E]/10 p-5 text-sm text-[#7A9E7E]">
-            Talmor Plus is unlocked{user?.email ? ` for ${user.email}` : ''}. Your premium download options are now available in the dashboard.
+            Talmor Plus is unlocked{user?.email ? ` for ${user.email}` : ''}. Premium downloads are available in the dashboard.
           </div>
         ) : (
           <>
@@ -126,7 +122,7 @@ export default function RakNetPage() {
               <h2 className="text-sm font-semibold text-white">Redeem code</h2>
               <p className="mt-1 text-xs text-zinc-500">
                 {user
-                  ? 'Paste the code you received after completing the offers.'
+                  ? 'Paste the code you received after completing the offer.'
                   : 'Sign in first, then redeem the code on this account.'}
               </p>
               {user ? (
@@ -134,7 +130,7 @@ export default function RakNetPage() {
                   <input
                     value={code}
                     onChange={(e) => setCode(e.target.value)}
-                    placeholder="RAKNET-XXXX-XXXX"
+                    placeholder="Enter your unlock code"
                     className="flex-1 rounded-lg border border-zinc-900 bg-black px-3 py-2.5 font-mono text-sm outline-none focus:border-[#7A9E7E] text-white placeholder-zinc-600"
                   />
                   <button

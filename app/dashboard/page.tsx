@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   getAuthUser,
   getUserProfile,
@@ -12,33 +13,26 @@ import {
   type DbUser,
 } from '../../lib/supabase';
 
-type Tab = 'overview' | 'keys' | 'downloads' | 'settings' | 'admin';
-
 function getTimeRemaining(expiresAt: string | null | undefined): string | null {
   if (!expiresAt) return null;
   const diff = new Date(expiresAt).getTime() - Date.now();
   if (diff <= 0) return 'Expired';
   const hours = Math.floor(diff / 3600000);
   const minutes = Math.floor((diff % 3600000) / 60000);
-  return `${hours}h ${minutes}m remaining`;
+  return `${hours}h ${minutes}m`;
 }
 
 export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<DbUser | null>(null);
-  const [tab, setTab] = useState<Tab>('overview');
+  const [view, setView] = useState<'profile' | 'key' | 'plus'>('profile');
   const [loading, setLoading] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [toast, setToast] = useState('');
   const [usernameEdit, setUsernameEdit] = useState('');
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState('');
-
-  const [inviteCount, setInviteCount] = useState(1);
-  const [generatedCodes, setGeneratedCodes] = useState<{ code: string; created_at: string }[]>([]);
-  const [generating, setGenerating] = useState(false);
   const [generatingKey, setGeneratingKey] = useState(false);
-
-  const isAdmin = profile?.role === 'owner' || profile?.role === 'admin';
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -50,17 +44,23 @@ export default function Dashboard() {
     (async () => {
       const u = await getAuthUser();
       if (cancelled) return;
-      if (!u) {
-        router.replace('/login');
-        return;
-      }
+      if (!u) { router.replace('/login'); return; }
       setUser(u);
       try {
         const p = await getUserProfile();
         if (cancelled) return;
         setProfile(p);
         if (p?.username) setUsernameEdit(p.username);
-        if (p && !p.license_key) setTab('keys');
+        if (p && !p.license_key) {
+          const supabase = (await import('../../lib/supabase/client')).createClient();
+          const { data } = await supabase.rpc('generate_activation_key');
+          if (data?.success) {
+            setProfile((prev) => (prev ? { ...prev, license_key: data.key, key_expires_at: data.expires_at } : prev));
+          }
+        }
+        if (p && p.license_key) {
+          setView('key');
+        }
       } catch {}
       if (!cancelled) setLoading(false);
     })();
@@ -74,11 +74,8 @@ export default function Dashboard() {
       await updateUserProfile(usernameEdit.trim());
       setProfile((prev) => (prev ? { ...prev, username: usernameEdit.trim() } : prev));
       showToast('Username saved');
-    } catch {
-      showToast('Failed to save');
-    } finally {
-      setSaving(false);
-    }
+    } catch { showToast('Failed to save'); }
+    finally { setSaving(false); }
   }
 
   async function handleLogout() {
@@ -86,55 +83,19 @@ export default function Dashboard() {
     router.replace('/');
   }
 
-  async function handleGenerateKey() {
+  async function handleRegenerateKey() {
     setGeneratingKey(true);
     try {
       const supabase = (await import('../../lib/supabase/client')).createClient();
       const { data, error } = await supabase.rpc('generate_activation_key');
       if (error || !data?.success) {
-        showToast(data?.error || 'Failed to generate key');
+        showToast(data?.error || 'Failed');
         return;
       }
-      setProfile((prev) => (prev ? { ...prev, license_key: data.key } : prev));
-      showToast(data.existing ? 'Your existing key' : 'Activation key generated (valid 24h)');
-    } catch {
-      showToast('Network error');
-    } finally {
-      setGeneratingKey(false);
-    }
-  }
-
-  async function handleGenerateInvites() {
-    setGenerating(true);
-    try {
-      const supabase = (await import('../../lib/supabase/client')).createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        showToast('Session expired');
-        return;
-      }
-
-      const res = await fetch('/api/invite/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ count: inviteCount }),
-      });
-
-      const data = await res.json();
-      if (data.codes) {
-        setGeneratedCodes((prev) => [...data.codes, ...prev]);
-        showToast(`Generated ${data.codes.length} invite code(s)`);
-      } else {
-        showToast(data.error || 'Failed to generate');
-      }
-    } catch {
-      showToast('Network error');
-    } finally {
-      setGenerating(false);
-    }
+      setProfile((prev) => (prev ? { ...prev, license_key: data.key, key_expires_at: data.expires_at } : prev));
+      showToast('New key generated (24h)');
+    } catch { showToast('Network error'); }
+    finally { setGeneratingKey(false); }
   }
 
   const keyExpires = (profile as any)?.key_expires_at ?? null;
@@ -143,369 +104,242 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="h-8 w-8 rounded-full border-2 border-[#7A9E7E] border-t-transparent animate-spin" />
+        <Image src="/logo.svg" alt="Talmor" width={48} height={48} className="opacity-50 animate-pulse" />
       </div>
     );
   }
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'overview', label: 'OVERVIEW' },
-    { id: 'keys', label: 'KEYS' },
-    { id: 'downloads', label: 'DOWNLOADS' },
-    { id: 'settings', label: 'SETTINGS' },
-    ...(isAdmin ? [{ id: 'admin' as Tab, label: 'ADMIN' }] : []),
-  ];
-
   return (
-    <div className="min-h-screen bg-black text-white relative overflow-hidden">
-      {/* Ambient background */}
+    <div className="min-h-screen bg-black text-white">
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full opacity-[0.03]"
-          style={{ background: 'radial-gradient(circle, #7A9E7E 0%, transparent 70%)', animation: 'float 6s ease-in-out infinite' }}
-        />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full opacity-[0.03]"
-          style={{ background: 'radial-gradient(circle, #7A9E7E 0%, transparent 70%)', animation: 'float 8s ease-in-out infinite 3s' }}
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[600px] h-[300px] opacity-[0.02]"
+          style={{ background: 'radial-gradient(ellipse, #7A9E7E 0%, transparent 70%)' }}
         />
       </div>
 
       {toast && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-zinc-900 backdrop-blur-md border border-zinc-800 text-xs text-white animate-fade-in">
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-full bg-zinc-900 border border-zinc-800 text-xs text-white animate-fade-in shadow-lg">
           {toast}
         </div>
       )}
 
-      <div className="relative z-10 max-w-4xl mx-auto px-6 py-10">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-10">
+      {/* Top bar */}
+      <div className="relative z-10 border-b border-zinc-900">
+        <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
+          <Link href="/dashboard" className="flex items-center gap-3">
+            <Image src="/logo.svg" alt="Talmor" width={28} height={28} />
+            <span className="text-sm font-semibold tracking-tight">Talmor</span>
+          </Link>
+
           <div className="flex items-center gap-4">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7A9E7E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
-            </svg>
-            <div>
-              <h1 className="text-lg font-bold tracking-tight">TALMOR</h1>
-              <p className="text-[10px] text-zinc-600 tracking-[0.15em]">DASHBOARD</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/"
-              className="text-[11px] text-zinc-600 hover:text-white transition-colors tracking-wider px-3 py-1.5 rounded-lg border border-zinc-800 hover:border-zinc-600"
-            >
-              HOME
-            </Link>
-            <a
-              href="/support"
-              className="text-[11px] text-zinc-600 hover:text-white transition-colors tracking-wider px-3 py-1.5 rounded-lg border border-zinc-800 hover:border-zinc-600"
-            >
-              SUPPORT
-            </a>
-            <button
-              onClick={handleLogout}
-              className="text-[11px] text-zinc-600 hover:text-white transition-colors tracking-wider px-3 py-1.5 rounded-lg border border-zinc-800 hover:border-zinc-600"
-            >
-              LOG OUT
-            </button>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-1 mb-8 border-b border-zinc-900">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`px-4 py-3 text-[11px] font-semibold tracking-wider transition-colors relative ${
-                tab === t.id ? 'text-white' : 'text-zinc-600 hover:text-zinc-300'
-              }`}
-            >
-              {t.label}
-              {tab === t.id && (
-                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#7A9E7E] shadow-[0_0_12px_rgba(122,158,126,0.5)]" />
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Content */}
-        {tab === 'overview' && (
-          <div className="space-y-6">
-            <div className="rounded-xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-xl p-6">
-              <h2 className="text-xs font-semibold tracking-wider text-zinc-500 mb-4">ACCOUNT</h2>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-[10px] text-zinc-600 tracking-wide mb-1">EMAIL</p>
-                  <p className="text-sm text-white">{user?.email ?? '—'}</p>
+            <Link href="/" className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors">Home</Link>
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="flex items-center gap-2.5 rounded-full border border-zinc-800 bg-zinc-900/50 px-3 py-1.5 text-sm hover:border-zinc-700 transition-colors"
+              >
+                <div className="h-7 w-7 rounded-full bg-[#7A9E7E]/20 flex items-center justify-center text-xs font-semibold text-[#7A9E7E]">
+                  {(user?.email?.[0] || '?').toUpperCase()}
                 </div>
-                <div>
-                  <p className="text-[10px] text-zinc-600 tracking-wide mb-1">USERNAME</p>
-                  <p className="text-sm text-white">{profile?.username ?? '—'}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-zinc-600 tracking-wide mb-1">ROLE</p>
-                  <p className="text-sm text-white capitalize">{profile?.role ?? 'user'}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-zinc-600 tracking-wide mb-1">MEMBER SINCE</p>
-                  <p className="text-sm text-white">
-                    {user?.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
-                  </p>
-                </div>
-              </div>
-            </div>
+                <span className="text-xs text-zinc-300 hidden sm:block">{user?.email}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-zinc-500 transition-transform ${menuOpen ? 'rotate-180' : ''}`}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
 
-            <div className="rounded-xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-xl p-6">
-              <h2 className="text-xs font-semibold tracking-wider text-zinc-500 mb-4">PLAN</h2>
-              <p className="text-sm text-white mb-2">Talmor &mdash; <span className="text-[#7A9E7E]">Free</span></p>
-              <p className="text-xs text-zinc-600 mb-4">
-                Plus unlocks premium download options. Complete a Work.ink or LootLabs offer, then
-                redeem your code.
-              </p>
-              <a href="/raknet" className="inline-flex items-center gap-1 px-4 py-2 rounded-lg bg-[#7A9E7E]/10 text-[#7A9E7E] text-xs font-semibold hover:bg-[#7A9E7E]/20 transition-colors">
-                {profile?.raknet_unlocked ? 'Plus unlocked' : 'Unlock Plus'}
-              </a>
-            </div>
-
-            <div className="rounded-xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-xl p-6">
-              <h2 className="text-xs font-semibold tracking-wider text-zinc-500 mb-4">ACTIVATION STATUS</h2>
-              <div className="flex items-center gap-3">
-                <span className={`h-2 w-2 rounded-full ${profile?.license_key ? 'bg-[#7A9E7E]' : 'bg-zinc-600'}`} />
-                <p className="text-sm text-white">
-                  {profile?.license_key ? 'Activation key ready' : 'No activation key generated'}
-                </p>
-              </div>
-              {profile?.license_key && (
-                <div className="mt-3 space-y-2">
-                  <div className="px-3 py-2 rounded-lg bg-black border border-zinc-900 text-xs font-mono text-zinc-400 flex items-center justify-between">
-                    <span>{profile.license_key}</span>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-56 z-20 rounded-xl border border-zinc-800 bg-zinc-900 backdrop-blur-xl shadow-2xl overflow-hidden">
+                    <div className="px-4 py-3 border-b border-zinc-800">
+                      <p className="text-xs text-zinc-400 truncate">{user?.email}</p>
+                    </div>
                     <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(profile.license_key!);
-                        showToast('Copied to clipboard');
-                      }}
-                      className="text-[10px] text-zinc-600 hover:text-white transition-colors tracking-wider ml-3"
+                      onClick={() => { setView('profile'); setMenuOpen(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-3 ${view === 'profile' ? 'text-[#7A9E7E] bg-[#7A9E7E]/5' : 'text-zinc-400 hover:text-white hover:bg-zinc-800'}`}
                     >
-                      COPY
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                      Profile
                     </button>
+                    <button
+                      onClick={() => { setView('key'); setMenuOpen(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-3 ${view === 'key' ? 'text-[#7A9E7E] bg-[#7A9E7E]/5' : 'text-zinc-400 hover:text-white hover:bg-zinc-800'}`}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+                      Activation Key
+                    </button>
+                    <button
+                      onClick={() => { setView('plus'); setMenuOpen(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-3 ${view === 'plus' ? 'text-[#7A9E7E] bg-[#7A9E7E]/5' : 'text-zinc-400 hover:text-white hover:bg-zinc-800'}`}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                      Talmor Plus
+                    </button>
+                    <div className="border-t border-zinc-800">
+                      <Link href="/support" className="block px-4 py-2.5 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">
+                        Support
+                      </Link>
+                      <button
+                        onClick={handleLogout}
+                        className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                      >
+                        Log out
+                      </button>
+                    </div>
                   </div>
-                  {timeRemaining && (
-                    <p className="text-[11px] text-zinc-500">
-                      Expires in <span className="text-[#7A9E7E]">{timeRemaining}</span>
-                    </p>
-                  )}
-                </div>
+                </>
               )}
             </div>
           </div>
-        )}
+        </div>
+      </div>
 
-        {tab === 'keys' && (
-          <div className="rounded-xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-xl p-6">
-            <h2 className="text-xs font-semibold tracking-wider text-zinc-500 mb-4">YOUR ACTIVATION KEY</h2>
-            {profile?.license_key ? (
-              <div className="space-y-4">
-                <div className="px-4 py-3 rounded-lg bg-black border border-zinc-900 font-mono text-sm text-white tracking-wider flex items-center justify-between">
-                  <span>{profile.license_key}</span>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(profile.license_key!);
-                      showToast('Copied to clipboard');
-                    }}
-                    className="text-[10px] text-zinc-600 hover:text-white transition-colors tracking-wider"
-                  >
-                    COPY
-                  </button>
-                </div>
-                {timeRemaining ? (
-                  <p className="text-[11px] text-zinc-600">
-                    Your key expires in{' '}
-                    <span className="text-[#7A9E7E] font-medium">{timeRemaining}</span>.{' '}
-                    Regenerate below to reset the timer.
-                  </p>
-                ) : (
-                  <p className="text-[11px] text-zinc-600">
-                    After signing in to the Talmor app, enter this key to activate.
-                  </p>
-                )}
-                <button
-                  onClick={handleGenerateKey}
-                  disabled={generatingKey}
-                  className="px-4 py-2 rounded-lg border border-zinc-800 text-[11px] font-semibold tracking-wider text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors disabled:opacity-40"
-                >
-                  {generatingKey ? 'REGENERATING...' : 'REGENERATE KEY (resets 24h)'}
-                </button>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-sm text-zinc-500 mb-4">You haven't generated an activation key yet.</p>
-                <button
-                  onClick={handleGenerateKey}
-                  disabled={generatingKey}
-                  className="btn-primary px-6 py-3 rounded-lg text-[11px] font-semibold tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {generatingKey ? 'GENERATING...' : 'GENERATE ACTIVATION KEY'}
-                </button>
-                <p className="text-[11px] text-zinc-600 mt-4">
-                  Required to sign in to the Talmor desktop app. Valid for 24 hours.
-                </p>
-              </div>
-            )}
-          </div>
-        )}
+      {/* Content */}
+      <div className="relative z-10 max-w-3xl mx-auto px-6 py-12">
 
-        {tab === 'downloads' && (
-          <div className="rounded-xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-xl p-6">
-            <h2 className="text-xs font-semibold tracking-wider text-zinc-500 mb-4">DOWNLOAD TALMOR</h2>
-            <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-black border border-zinc-900">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-white font-semibold">Talmor v1.0</p>
-                    <p className="text-[10px] text-zinc-600 mt-1">Latest release &bull; Windows 10/11 &bull; x64</p>
-                  </div>
-                  <a
-                    href="#"
-                    className="btn-white px-4 py-2 rounded-lg text-[11px] font-semibold tracking-wider"
-                  >
-                    DOWNLOAD
-                  </a>
-                </div>
-              </div>
-              <div className="p-4 rounded-xl bg-black border border-zinc-900">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-white font-semibold">Talmor Plus</p>
-                    <p className="text-[10px] text-zinc-600 mt-1">Unlock via partner offer &bull; Premium download</p>
-                  </div>
-                  <a
-                    href="/raknet"
-                    className="inline-flex items-center gap-1 px-4 py-2 rounded-lg bg-[#7A9E7E]/10 text-[#7A9E7E] text-[11px] font-semibold hover:bg-[#7A9E7E]/20 transition-colors"
-                  >
-                    {profile?.raknet_unlocked ? 'Unlocked' : 'Unlock Plus'}
-                  </a>
-                </div>
-              </div>
-              <p className="text-[11px] text-zinc-600">
-                Requires administrator privileges. Antivirus may flag the executor &mdash; this is expected.
-              </p>
+        {view === 'profile' && (
+          <div className="max-w-md mx-auto text-center animate-fade-in">
+            <div className="w-20 h-20 rounded-full bg-[#7A9E7E]/10 mx-auto mb-4 flex items-center justify-center">
+              <span className="text-3xl font-bold text-[#7A9E7E]">
+                {(user?.email?.[0] || '?').toUpperCase()}
+              </span>
             </div>
-          </div>
-        )}
+            <h1 className="text-xl font-semibold text-white">
+              {profile?.username || 'User'}
+            </h1>
+            <p className="text-sm text-zinc-500 mt-1">{user?.email}</p>
+            <p className="text-xs text-zinc-600 mt-1">
+              Member since {user?.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
+            </p>
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-zinc-900 px-3 py-1">
+              <span className={`h-1.5 w-1.5 rounded-full ${profile?.role === 'owner' ? 'bg-yellow-400' : profile?.role === 'admin' ? 'bg-blue-400' : 'bg-[#7A9E7E]'}`} />
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{profile?.role || 'user'}</span>
+            </div>
 
-        {tab === 'settings' && (
-          <div className="space-y-6">
-            <div className="rounded-xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-xl p-6">
-              <h2 className="text-xs font-semibold tracking-wider text-zinc-500 mb-4">USERNAME</h2>
-              <div className="flex gap-3">
+            <div className="mt-8 text-left">
+              <label className="block text-xs text-zinc-600 mb-1.5 tracking-wide">USERNAME</label>
+              <div className="flex gap-2">
                 <input
                   type="text"
                   value={usernameEdit}
                   onChange={(e) => setUsernameEdit(e.target.value)}
-                  className="flex-1 px-4 py-3 bg-black border border-zinc-900 rounded-lg focus:outline-none focus:border-[#7A9E7E] text-sm text-white placeholder-zinc-600"
+                  className="flex-1 px-3 py-2 bg-black border border-zinc-900 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#7A9E7E] transition-colors"
                   placeholder="your_username"
                 />
                 <button
                   onClick={handleSaveUsername}
                   disabled={saving || !usernameEdit.trim()}
-                  className="btn-primary px-6 py-3 rounded-lg text-[11px] font-semibold tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-4 py-2 rounded-lg bg-[#7A9E7E]/10 text-[#7A9E7E] text-xs font-semibold hover:bg-[#7A9E7E]/20 transition-colors disabled:opacity-40"
                 >
-                  {saving ? 'SAVING...' : 'SAVE'}
+                  {saving ? '...' : 'Save'}
                 </button>
               </div>
-            </div>
-
-            <div className="rounded-xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-xl p-6">
-              <h2 className="text-xs font-semibold tracking-wider text-zinc-500 mb-4">DANGER ZONE</h2>
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 border border-red-500/30 text-red-400 rounded-lg text-[11px] font-semibold tracking-wider hover:bg-red-500/10 transition-colors"
-              >
-                LOG OUT
-              </button>
             </div>
           </div>
         )}
 
-        {tab === 'admin' && isAdmin && (
-          <div className="space-y-6">
-            <div className="rounded-xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-xl p-6">
-              <h2 className="text-xs font-semibold tracking-wider text-zinc-500 mb-4">GENERATE INVITE CODES</h2>
-              <p className="text-[11px] text-zinc-600 mb-4">
-                Create invite codes for new users. Each code can only be used once.
-              </p>
-              <div className="flex gap-3 items-end">
-                <div className="flex-1">
-                  <label className="block text-[10px] text-zinc-600 tracking-wide mb-1">COUNT</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={inviteCount}
-                    onChange={(e) => setInviteCount(Math.min(50, Math.max(1, parseInt(e.target.value) || 1)))}
-                    className="w-full px-4 py-3 bg-black border border-zinc-900 rounded-lg focus:outline-none focus:border-[#7A9E7E] text-sm text-white"
-                  />
-                </div>
-                <button
-                  onClick={handleGenerateInvites}
-                  disabled={generating}
-                  className="btn-primary px-6 py-3 rounded-lg text-[11px] font-semibold tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {generating ? 'GENERATING...' : 'GENERATE'}
-                </button>
+        {view === 'key' && (
+          <div className="max-w-md mx-auto animate-fade-in">
+            <div className="text-center mb-8">
+              <div className="w-14 h-14 rounded-2xl bg-[#7A9E7E]/10 mx-auto mb-4 flex items-center justify-center">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7A9E7E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
               </div>
+              <h1 className="text-xl font-semibold text-white">Activation Key</h1>
+              <p className="text-sm text-zinc-500 mt-1">
+                Your key is automatically linked to your account.
+              </p>
             </div>
 
-            {generatedCodes.length > 0 && (
-              <div className="rounded-xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-xl p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xs font-semibold tracking-wider text-zinc-500">GENERATED CODES</h2>
+            {profile?.license_key ? (
+              <div className="rounded-2xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-xl p-6">
+                <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-black border border-zinc-900 font-mono text-sm text-white tracking-wider">
+                  <span className="truncate">{profile.license_key}</span>
                   <button
-                    onClick={() => {
-                      const all = generatedCodes.map((c) => c.code).join('\n');
-                      navigator.clipboard.writeText(all);
-                      showToast('All codes copied');
-                    }}
-                    className="text-[10px] text-zinc-600 hover:text-white transition-colors tracking-wider"
+                    onClick={() => { navigator.clipboard.writeText(profile.license_key!); showToast('Copied!'); }}
+                    className="shrink-0 ml-3 text-[10px] text-zinc-600 hover:text-white transition-colors tracking-wider bg-zinc-900 px-2 py-1 rounded"
                   >
-                    COPY ALL
+                    COPY
                   </button>
                 </div>
-                <div className="space-y-2 max-h-80 overflow-y-auto">
-                  {generatedCodes.map((c, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between px-3 py-2 rounded-lg bg-black border border-zinc-900"
-                    >
-                      <code className="font-mono text-xs text-zinc-400 tracking-wider">{c.code}</code>
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(c.code);
-                          showToast('Copied');
-                        }}
-                        className="text-[10px] text-zinc-600 hover:text-white transition-colors"
-                      >
-                        COPY
-                      </button>
-                    </div>
-                  ))}
+                <div className="mt-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2 w-2 rounded-full ${timeRemaining && timeRemaining !== 'Expired' ? 'bg-[#7A9E7E]' : 'bg-red-400'}`} />
+                    <span className="text-xs text-zinc-500">
+                      {timeRemaining ? `${timeRemaining} remaining` : 'No expiry'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleRegenerateKey}
+                    disabled={generatingKey}
+                    className="text-xs text-zinc-500 hover:text-[#7A9E7E] transition-colors disabled:opacity-40"
+                  >
+                    {generatingKey ? 'Regenerating...' : 'Regenerate'}
+                  </button>
                 </div>
+              </div>
+            ) : (
+              <div className="text-center py-12 rounded-2xl border border-zinc-900 bg-zinc-900/20">
+                <p className="text-sm text-zinc-500">Generating your key...</p>
               </div>
             )}
 
-            <div className="rounded-xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-xl p-6">
-              <h2 className="text-xs font-semibold tracking-wider text-zinc-500 mb-4">ROLE INFO</h2>
-              <div className="space-y-2 text-[11px] text-zinc-600">
-                <p><span className="text-zinc-300">Owner</span> — Full access. Can manage users, generate codes, assign licenses.</p>
-                <p><span className="text-zinc-300">Admin</span> — Can generate invite codes and manage tickets.</p>
-                <p><span className="text-zinc-300">User</span> — Standard access. Can submit support tickets and view their license.</p>
+            <p className="text-center text-[11px] text-zinc-600 mt-6">
+              Enter this key in the Talmor desktop app to activate. Valid for 24 hours.
+            </p>
+          </div>
+        )}
+
+        {view === 'plus' && (
+          <div className="max-w-md mx-auto animate-fade-in">
+            <div className="text-center mb-8">
+              <div className="w-14 h-14 rounded-2xl bg-[#7A9E7E]/10 mx-auto mb-4 flex items-center justify-center">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7A9E7E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
               </div>
+              <h1 className="text-xl font-semibold text-white">Talmor Plus</h1>
+              <p className="text-sm text-zinc-500 mt-1">
+                Unlock premium download options.
+              </p>
             </div>
+
+            {profile?.raknet_unlocked ? (
+              <div className="rounded-2xl border border-[#7A9E7E]/20 bg-[#7A9E7E]/5 p-6 text-center">
+                <span className="text-4xl mb-3 block">&#10003;</span>
+                <p className="text-[#7A9E7E] font-semibold">Talmor Plus is unlocked</p>
+                <p className="text-xs text-zinc-500 mt-2">Premium downloads are available.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <a
+                  href={user ? `${(process.env.NEXT_PUBLIC_WORKINK_URL || 'https://work.ink/talmor-plus')}?ref=${user.id?.slice(0, 8)}` : '/login'}
+                  target="_blank" rel="noreferrer"
+                  className="flex items-center justify-between rounded-xl border border-zinc-900 bg-zinc-900/20 p-4 hover:border-[#7A9E7E]/30 hover:bg-[#7A9E7E]/5 transition-all group"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-white">Work.ink</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">Complete an offer to unlock</p>
+                  </div>
+                  <span className="text-sm text-[#7A9E7E] group-hover:translate-x-1 transition-transform">&#8594;</span>
+                </a>
+                <a
+                  href={user ? `${(process.env.NEXT_PUBLIC_LOOTLABS_URL || 'https://lootlabs.gg/talmor-plus')}?ref=${user.id?.slice(0, 8)}` : '/login'}
+                  target="_blank" rel="noreferrer"
+                  className="flex items-center justify-between rounded-xl border border-zinc-900 bg-zinc-900/20 p-4 hover:border-[#7A9E7E]/30 hover:bg-[#7A9E7E]/5 transition-all group"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-white">LootLabs</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">Complete an offer to unlock</p>
+                  </div>
+                  <span className="text-sm text-[#7A9E7E] group-hover:translate-x-1 transition-transform">&#8594;</span>
+                </a>
+              </div>
+            )}
+
+            <p className="text-center text-[11px] text-zinc-600 mt-6">
+              One-time unlock. No recurring payment.
+            </p>
           </div>
         )}
       </div>
     </div>
   );
 }
-
-

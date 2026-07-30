@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 
 const WORKINK_URL = process.env.NEXT_PUBLIC_WORKINK_URL || 'https://work.ink/talmor-plus';
@@ -31,7 +32,6 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-black text-zinc-100 relative overflow-hidden">
 
-      {/* Animated background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full opacity-[0.03]"
           style={{ background: 'radial-gradient(circle, #7A9E7E 0%, transparent 70%)', animation: 'float 8s ease-in-out infinite' }}
@@ -51,16 +51,11 @@ export default function HomePage() {
         />
       </div>
 
-      {/* Nav */}
       <header className="site-nav sticky top-0 z-50 relative">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-5">
-          <Link href="/" className="flex items-center gap-2.5 font-semibold tracking-tight text-white">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7A9E7E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
-            </svg>
-            Talmor
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
+          <Link href="/" className="flex items-center gap-3 font-semibold tracking-tight text-white">
+            <Image src="/logo.svg" alt="Talmor" width={36} height={36} className="rounded" />
+            <span className="text-lg">Talmor</span>
           </Link>
           <nav className="hidden items-center gap-6 text-sm text-zinc-500 sm:flex">
             <Link href="/#download" className="hover:text-white transition-colors">Download</Link>
@@ -83,8 +78,10 @@ export default function HomePage() {
       </header>
 
       <main className="relative z-10">
-        {/* Hero */}
-        <section className="mx-auto max-w-6xl px-5 pb-24 pt-24 text-center sm:pt-32">
+        <section className="mx-auto max-w-6xl px-5 pb-24 pt-20 text-center sm:pt-28">
+          <div className="mb-10 flex justify-center">
+            <Image src="/logo.svg" alt="Talmor" width={160} height={160} className="opacity-90" priority />
+          </div>
           <div className="inline-flex items-center gap-2 rounded-full border border-[#7A9E7E]/20 bg-[#7A9E7E]/5 px-4 py-1.5 text-xs text-[#7A9E7E] mb-6">
             <span className="h-1.5 w-1.5 rounded-full bg-[#7A9E7E] animate-pulse" />
             Free forever &mdash; no subscription
@@ -116,7 +113,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Features */}
         <section id="features" className="border-t border-zinc-900 py-24">
           <div className="mx-auto max-w-6xl px-5">
             <p className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-[#7A9E7E]">Features</p>
@@ -156,7 +152,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Talmor Plus */}
         <section id="plus" className="border-t border-zinc-900 py-24">
           <div className="mx-auto max-w-6xl px-5">
             <div className="mx-auto max-w-2xl text-center">
@@ -169,7 +164,6 @@ export default function HomePage() {
             </div>
 
             <div className="mt-14 grid gap-5 sm:grid-cols-2 max-w-2xl mx-auto">
-              {/* Work.ink */}
               <a
                 href={user ? userWorkspace : '/login'}
                 className="group relative overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900/20 p-6 text-left transition-all hover:border-[#7A9E7E]/30 hover:bg-[#7A9E7E]/5"
@@ -182,11 +176,10 @@ export default function HomePage() {
                   Plus access.
                 </p>
                 <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-[#7A9E7E]">
-                  {user ? 'Unlock via Work.ink →' : 'Sign in to unlock →'}
+                  {user ? 'Unlock via Work.ink \u2192' : 'Sign in to unlock \u2192'}
                 </span>
               </a>
 
-              {/* LootLabs */}
               <a
                 href={user ? userLootlabs : '/login'}
                 className="group relative overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900/20 p-6 text-left transition-all hover:border-[#7A9E7E]/30 hover:bg-[#7A9E7E]/5"
@@ -199,7 +192,7 @@ export default function HomePage() {
                   Plus access.
                 </p>
                 <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-[#7A9E7E]">
-                  {user ? 'Unlock via LootLabs →' : 'Sign in to unlock →'}
+                  {user ? 'Unlock via LootLabs \u2192' : 'Sign in to unlock \u2192'}
                 </span>
               </a>
             </div>
@@ -214,14 +207,13 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Download */}
         <section id="download" className="border-t border-zinc-900 py-24">
           <div className="mx-auto max-w-6xl px-5 text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#7A9E7E]">Get started</p>
             <h2 className="mt-3 text-3xl font-semibold text-white">Download Talmor</h2>
             <p className="mx-auto mt-3 max-w-lg text-sm text-zinc-500">
-              Self-contained Windows x64 installer. Sign in, generate your activation key
-              (valid 24h), enter it in the app, and you&apos;re ready.
+              Self-contained Windows x64 installer. Sign in, your activation key is
+              automatically linked to your account &mdash; no manual steps.
             </p>
             <div className="mt-10 flex flex-wrap justify-center gap-4">
               {loading ? (
@@ -243,14 +235,13 @@ export default function HomePage() {
             </div>
             {!user && !loading && (
               <p className="mt-6 text-xs text-zinc-600">
-                Free or Plus — login is required to download.
+                Free or Plus &mdash; login is required to download.
               </p>
             )}
           </div>
         </section>
       </main>
 
-      {/* Footer */}
       <footer className="relative z-10 border-t border-zinc-900 py-10 text-center text-xs text-zinc-600">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-6 px-5">
           <Link href="/privacy" className="hover:text-zinc-300 transition-colors">Privacy</Link>
