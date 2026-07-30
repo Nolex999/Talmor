@@ -201,7 +201,10 @@ DROP FUNCTION IF EXISTS public.consume_invite(TEXT, UUID);
 -- 3c. Activation keys — every user generates their OWN activation key on the
 -- website. The desktop app requires it as a second step after email/password
 -- login. The key is stored in profiles.license_key. Format: 16-char base36
--- (lowercase a-z + 0-9), e.g. 0fx3dfc49g384vm3.
+-- (lowercase a-z + 0-9), e.g. 0fx3dfc49g384vm3. Keys expire 24 hours after
+-- generation.
+
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS key_expires_at TIMESTAMPTZ;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_license_key
 ON profiles (license_key)
@@ -214,36 +217,41 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_uid      UUID := auth.uid();
-  v_existing TEXT;
-  v_key      TEXT := '';
-  v_alphabet TEXT := '0123456789abcdefghijklmnopqrstuvwxyz';
-  v_bytes    BYTEA := uuid_send(gen_random_uuid());
-  i          INT;
+  v_uid       UUID := auth.uid();
+  v_existing  TEXT;
+  v_expires   TIMESTAMPTZ;
+  v_key       TEXT := '';
+  v_alphabet  TEXT := '0123456789abcdefghijklmnopqrstuvwxyz';
+  v_bytes     BYTEA := uuid_send(gen_random_uuid());
+  i           INT;
 BEGIN
   IF v_uid IS NULL THEN
     RETURN json_build_object('success', false, 'error', 'Not authenticated');
   END IF;
 
-  -- The signup trigger normally creates this row. The upsert makes the RPC
-  -- resilient for accounts created before that trigger existed.
   INSERT INTO profiles (id) VALUES (v_uid) ON CONFLICT (id) DO NOTHING;
 
-  -- Lock the row so two simultaneous requests cannot return different keys.
-  SELECT license_key INTO v_existing
+  SELECT license_key, key_expires_at INTO v_existing, v_expires
   FROM profiles
   WHERE id = v_uid
   FOR UPDATE;
-  IF v_existing IS NOT NULL AND length(v_existing) > 0 THEN
-    RETURN json_build_object('success', true, 'key', v_existing, 'existing', true);
+
+  -- Return existing key if it's still valid
+  IF v_existing IS NOT NULL AND length(v_existing) > 0
+     AND v_expires IS NOT NULL AND v_expires > now() THEN
+    RETURN json_build_object('success', true, 'key', v_existing, 'existing', true, 'expires_at', v_expires);
   END IF;
 
+  -- Generate a brand-new key (or regenerate an expired one)
   FOR i IN 0..15 LOOP
     v_key := v_key || substr(v_alphabet, 1 + (get_byte(v_bytes, i) % 36), 1);
   END LOOP;
 
-  UPDATE profiles SET license_key = v_key WHERE id = v_uid;
-  RETURN json_build_object('success', true, 'key', v_key, 'existing', false);
+  UPDATE profiles
+  SET license_key = v_key, key_expires_at = now() + interval '24 hours'
+  WHERE id = v_uid;
+
+  RETURN json_build_object('success', true, 'key', v_key, 'existing', false, 'expires_at', now() + interval '24 hours');
 END;
 $$;
 
@@ -258,8 +266,9 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_uid UUID := auth.uid();
-  v_key TEXT;
+  v_uid    UUID := auth.uid();
+  v_key    TEXT;
+  v_expire TIMESTAMPTZ;
 BEGIN
   IF v_uid IS NULL THEN
     RETURN json_build_object('valid', false, 'error', 'Not authenticated');
@@ -270,11 +279,16 @@ BEGIN
       'error', 'Activation keys must be 16 letters or numbers');
   END IF;
 
-  SELECT license_key INTO v_key FROM profiles WHERE id = v_uid;
+  SELECT license_key, key_expires_at INTO v_key, v_expire FROM profiles WHERE id = v_uid;
 
   IF v_key IS NULL OR length(v_key) = 0 THEN
     RETURN json_build_object('valid', false,
       'error', 'No activation key found. Generate one on the Talmor website first.');
+  END IF;
+
+  IF v_expire IS NOT NULL AND v_expire <= now() THEN
+    RETURN json_build_object('valid', false,
+      'error', 'Activation key expired. Generate a new one on the Talmor website.');
   END IF;
 
   IF lower(trim(p_key)) = lower(v_key) THEN

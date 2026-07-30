@@ -1,17 +1,14 @@
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-[#0a0a0c] text-white bg-grid flex items-center justify-center px-6 py-16 relative overflow-hidden">
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-white/[0.03] rounded-full blur-[150px] animate-float" />
-        <div
-          className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-white/[0.02] rounded-full blur-[150px] animate-float"
-          style={{ animationDelay: '3s' }}
+    <div className="min-h-screen bg-black text-white flex items-center justify-center px-6 py-16 relative overflow-hidden">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full opacity-[0.03]"
+          style={{ background: 'radial-gradient(circle, #7A9E7E 0%, transparent 70%)', animation: 'float 8s ease-in-out infinite' }}
         />
       </div>
 
       <div className="w-full max-w-2xl relative z-10">
-        <div className="gradient-border">
-          <div className="bg-black/50 backdrop-blur-xl rounded-2xl p-8 sm:p-10">
+        <div className="rounded-xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-xl p-8 sm:p-10">
             <div className="flex justify-center mb-5">
               <img src="/logo.svg" alt="Talmor" className="w-12 h-12 object-contain" />
             </div>
@@ -64,7 +61,6 @@ export default function TermsPage() {
             <div className="text-center mt-8">
               <a href="/" className="text-[11px] text-zinc-400 hover:text-white transition-colors">&larr; Back to login</a>
             </div>
-          </div>
         </div>
       </div>
     </div>

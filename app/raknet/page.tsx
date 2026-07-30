@@ -2,15 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 
-const WORKINK_URL = process.env.NEXT_PUBLIC_WORKINK_URL || 'https://work.ink/your-talmor-raknet-link';
-const LOOTLABS_URL = process.env.NEXT_PUBLIC_LOOTLABS_URL || 'https://lootlabs.gg/your-talmor-raknet-link';
+const WORKINK_URL = process.env.NEXT_PUBLIC_WORKINK_URL || 'https://work.ink/talmor-plus';
+const LOOTLABS_URL = process.env.NEXT_PUBLIC_LOOTLABS_URL || 'https://lootlabs.gg/talmor-plus';
 
 export default function RakNetPage() {
   const supabase = createClient();
-  const [email, setEmail] = useState<string | null>(null);
+  const [user, setUser] = useState<any>(null);
   const [code, setCode] = useState('');
   const [status, setStatus] = useState('');
   const [unlocked, setUnlocked] = useState(false);
@@ -19,7 +18,7 @@ export default function RakNetPage() {
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      setEmail(user?.email ?? null);
+      setUser(user);
       if (!user) return;
       const { data } = await supabase
         .from('profiles')
@@ -29,6 +28,14 @@ export default function RakNetPage() {
       setUnlocked(!!data?.raknet_unlocked);
     })();
   }, [supabase]);
+
+  const userWorkspace = user?.id
+    ? `${WORKINK_URL}?ref=${user.id.slice(0, 8)}`
+    : WORKINK_URL;
+
+  const userLootlabs = user?.id
+    ? `${LOOTLABS_URL}?ref=${user.id.slice(0, 8)}`
+    : LOOTLABS_URL;
 
   async function redeem() {
     if (!code.trim()) {
@@ -45,7 +52,7 @@ export default function RakNetPage() {
         setStatus(error.message);
       } else if (data?.ok || data?.valid || data === true) {
         setUnlocked(true);
-        setStatus('RakNet unlocked on your account. Enable it in the Talmor app settings.');
+        setStatus('Talmor Plus unlocked! Enable it in the app settings.');
       } else if (typeof data === 'object' && data !== null && 'error' in data) {
         setStatus(String((data as { error?: string }).error || 'Redeem failed'));
       } else {
@@ -60,65 +67,75 @@ export default function RakNetPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-zinc-100">
-      <header className="site-nav sticky top-0 z-40">
+    <div className="min-h-screen bg-black text-zinc-100">
+      {/* Animated background */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full opacity-[0.03]"
+          style={{ background: 'radial-gradient(circle, #7A9E7E 0%, transparent 70%)', animation: 'float 8s ease-in-out infinite' }}
+        />
+      </div>
+
+      <header className="site-nav sticky top-0 z-40 relative">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-5">
-          <Link href="/" className="flex items-center gap-2.5 font-semibold">
-            <Image src="/logo.png" alt="Talmor" width={28} height={28} className="rounded" />
+          <Link href="/" className="flex items-center gap-2.5 font-semibold text-white">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7A9E7E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2L2 7l10 5 10-5-10-5z" />
+              <path d="M2 17l10 5 10-5" />
+              <path d="M2 12l10 5 10-5" />
+            </svg>
             Talmor
           </Link>
-          <Link href="/dashboard" className="text-sm text-zinc-400 hover:text-white">Dashboard</Link>
+          <Link href="/dashboard" className="text-sm text-zinc-500 hover:text-white transition-colors">Dashboard</Link>
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-5 py-16">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-400">Optional unlock</p>
-        <h1 className="mt-3 text-3xl font-semibold text-white">RakNet networking</h1>
-        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400">
-          Talmor core stays free. RakNet is an optional networking layer for advanced use.
-          Complete a short Work.ink or LootLabs wall, then redeem the code here.
-          The desktop app only enables RakNet when your account is unlocked.
+      <main className="relative z-10 mx-auto max-w-3xl px-5 py-16">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7A9E7E]">Talmor Plus</p>
+        <h1 className="mt-3 text-3xl font-semibold text-white">Premium unlock</h1>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-500">
+          Talmor core stays free. Plus is an optional upgrade for premium download access.
+          Complete a short Work.ink or LootLabs offer, then redeem the code here.
         </p>
 
         {unlocked ? (
-          <div className="mt-8 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-sm text-emerald-300">
-            RakNet is unlocked{email ? ` for ${email}` : ''}. Open Talmor → Settings → enable RakNet Hooks.
+          <div className="mt-8 rounded-xl border border-[#7A9E7E]/30 bg-[#7A9E7E]/10 p-5 text-sm text-[#7A9E7E]">
+            Talmor Plus is unlocked{user?.email ? ` for ${user.email}` : ''}. Your premium download options are now available in the dashboard.
           </div>
         ) : (
           <>
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               <a
-                href={WORKINK_URL}
-                target="_blank"
-                rel="noreferrer"
+                href={user ? userWorkspace : '/login'}
+                target={user ? '_blank' : undefined}
+                rel={user ? 'noreferrer' : undefined}
                 className="btn-primary flex items-center justify-center px-4 py-3 text-sm"
               >
-                Unlock via Work.ink
+                {user ? 'Unlock via Work.ink' : 'Sign in to unlock'}
               </a>
               <a
-                href={LOOTLABS_URL}
-                target="_blank"
-                rel="noreferrer"
+                href={user ? userLootlabs : '/login'}
+                target={user ? '_blank' : undefined}
+                rel={user ? 'noreferrer' : undefined}
                 className="btn-ghost flex items-center justify-center px-4 py-3 text-sm"
               >
-                Unlock via LootLabs
+                {user ? 'Unlock via LootLabs' : 'Sign in to unlock'}
               </a>
             </div>
 
-            <div className="mt-8 rounded-xl border border-zinc-800 bg-[#111113] p-5">
+            <div className="mt-8 rounded-xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-xl p-5">
               <h2 className="text-sm font-semibold text-white">Redeem code</h2>
               <p className="mt-1 text-xs text-zinc-500">
-                {email
+                {user
                   ? 'Paste the code you received after completing the offers.'
                   : 'Sign in first, then redeem the code on this account.'}
               </p>
-              {email ? (
+              {user ? (
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <input
                     value={code}
                     onChange={(e) => setCode(e.target.value)}
                     placeholder="RAKNET-XXXX-XXXX"
-                    className="flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2.5 font-mono text-sm outline-none focus:border-blue-500"
+                    className="flex-1 rounded-lg border border-zinc-900 bg-black px-3 py-2.5 font-mono text-sm outline-none focus:border-[#7A9E7E] text-white placeholder-zinc-600"
                   />
                   <button
                     type="button"
@@ -126,7 +143,7 @@ export default function RakNetPage() {
                     onClick={redeem}
                     className="btn-primary px-4 py-2.5 text-sm disabled:opacity-50"
                   >
-                    {busy ? 'Redeeming…' : 'Redeem'}
+                    {busy ? 'Redeeming...' : 'Redeem'}
                   </button>
                 </div>
               ) : (
