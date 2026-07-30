@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   },
   applicationName: "Talmor",
   description:
-    "Talmor is free. Fast Luau scripting for Roblox. Premium unlock via Work.ink / LootLabs. Login required to download.",
+    "Talmor is free. Fast Luau scripting for Roblox. Sign in to download — no activation keys. Premium unlock via Work.ink / LootLabs.",
   icons: {
     icon: [
       { url: "/favicon.ico?v=3", sizes: "any" },

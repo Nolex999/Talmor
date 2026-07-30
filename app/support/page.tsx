@@ -226,8 +226,8 @@ export default function SupportPage() {
         </div>
 
         <p className="text-center text-[11px] text-zinc-600 mt-6">
-          <Link href="/dashboard" className="text-zinc-400 hover:text-white transition-colors">
-            &larr; Back to dashboard
+          <Link href="/account" className="text-zinc-400 hover:text-white transition-colors">
+            &larr; Back to account
           </Link>
         </p>
       </div>

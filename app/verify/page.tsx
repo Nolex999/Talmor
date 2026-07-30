@@ -71,8 +71,8 @@ function VerifyContent() {
             </div>
             <h1 className="text-2xl font-bold text-white mb-2">Talmor Plus</h1>
             <p className="text-[#7A9E7E] font-semibold mb-6">{message}</p>
-            <Link href="/dashboard" className="btn-primary inline-flex px-6 py-3 text-sm">
-              Go to Dashboard
+            <Link href="/account" className="btn-primary inline-flex px-6 py-3 text-sm">
+              Go to Account
             </Link>
           </div>
         )}
@@ -87,7 +87,7 @@ function VerifyContent() {
             <h1 className="text-2xl font-bold text-white mb-2">Verification failed</h1>
             <p className="text-zinc-400 mb-6">{message}</p>
             <div className="flex gap-3 justify-center">
-              <Link href="/dashboard" className="btn-ghost px-5 py-2.5 text-sm">Dashboard</Link>
+              <Link href="/account" className="btn-ghost px-5 py-2.5 text-sm">Account</Link>
               <Link href="/raknet" className="btn-primary px-5 py-2.5 text-sm">Try again</Link>
             </div>
           </div>

@@ -33,18 +33,18 @@ body {
 html { scroll-behavior: smooth; }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0px) scale(1); }
-  50% { transform: translateY(-20px) scale(1.05); }
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(0, -18px, 0) scale(1.04); }
+}
+
+@keyframes drift {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(24px, -16px, 0); }
 }
 
 @keyframes pulse-glow {
-  0%, 100% { opacity: 0.4; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(1.1); }
-}
-
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(1.08); }
 }
 
 @keyframes fade-in {
@@ -52,15 +52,83 @@ html { scroll-behavior: smooth; }
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes grid-scroll {
-  0% { transform: translateY(0); }
-  100% { transform: translateY(40px); }
+.animate-float { animation: float 8s ease-in-out infinite; }
+.animate-pulse-glow { animation: pulse-glow 5s ease-in-out infinite; }
+.animate-fade-in { animation: fade-in 0.4s ease-out; }
+
+/* ── Site backdrop ─────────────────────────────────────────── */
+.site-backdrop {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+  background:
+    radial-gradient(1200px 700px at 50% -10%, rgba(122, 158, 126, 0.14), transparent 55%),
+    radial-gradient(900px 600px at 100% 100%, rgba(122, 158, 126, 0.08), transparent 50%),
+    radial-gradient(700px 500px at 0% 80%, rgba(90, 120, 100, 0.07), transparent 45%),
+    #000;
 }
 
-.animate-float { animation: float 6s ease-in-out infinite; }
-.animate-pulse-glow { animation: pulse-glow 4s ease-in-out infinite; }
-.animate-fade-in { animation: fade-in 0.4s ease-out; }
-.animate-grid { animation: grid-scroll 8s linear infinite; }
+.site-backdrop__vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 35%, rgba(0, 0, 0, 0.72) 100%);
+}
+
+.site-backdrop__aurora {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  opacity: 0.55;
+}
+
+.site-backdrop__aurora--a {
+  width: 520px;
+  height: 520px;
+  top: -160px;
+  left: -80px;
+  background: radial-gradient(circle, rgba(122, 158, 126, 0.45) 0%, transparent 70%);
+  animation: float 11s ease-in-out infinite;
+}
+
+.site-backdrop__aurora--b {
+  width: 460px;
+  height: 460px;
+  right: -120px;
+  bottom: -80px;
+  background: radial-gradient(circle, rgba(143, 179, 150, 0.35) 0%, transparent 70%);
+  animation: drift 14s ease-in-out infinite;
+}
+
+.site-backdrop__aurora--c {
+  width: 640px;
+  height: 280px;
+  left: 50%;
+  top: 28%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse, rgba(122, 158, 126, 0.18) 0%, transparent 70%);
+  animation: pulse-glow 9s ease-in-out infinite;
+}
+
+.site-backdrop__mesh {
+  position: absolute;
+  inset: 0;
+  opacity: 0.045;
+  background-image:
+    linear-gradient(rgba(244, 244, 245, 0.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(244, 244, 245, 0.5) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(ellipse at center, black 20%, transparent 75%);
+}
+
+.site-backdrop__noise {
+  position: absolute;
+  inset: 0;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
 
 .btn-primary {
   background: var(--accent);
@@ -92,7 +160,7 @@ html { scroll-behavior: smooth; }
 .btn-ghost:hover { border-color: #333; background: #111; }
 
 .site-nav {
-  backdrop-filter: blur(12px);
-  background: rgba(0, 0, 0, 0.8);
-  border-bottom: 1px solid #1a1a1a;
+  backdrop-filter: blur(14px);
+  background: rgba(0, 0, 0, 0.72);
+  border-bottom: 1px solid rgba(26, 26, 26, 0.9);
 }

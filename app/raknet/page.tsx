@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 
-const WORKINK_URL = process.env.NEXT_PUBLIC_WORKINK_URL || 'https://work.ink/talmor-plus';
+const WORKINK_URL = process.env.NEXT_PUBLIC_WORKINK_URL || 'https://work.ink/2Na9/talmor-executor';
 const LOOTLABS_URL = process.env.NEXT_PUBLIC_LOOTLABS_URL || 'https://lootlabs.gg/talmor-plus';
 
 export default function RakNetPage() {
@@ -83,7 +83,7 @@ export default function RakNetPage() {
             <Image src="/logo.svg" alt="Talmor" width={28} height={28} />
             <span>Talmor</span>
           </Link>
-          <Link href="/dashboard" className="text-sm text-zinc-500 hover:text-white transition-colors">Dashboard</Link>
+          <Link href="/account" className="text-sm text-zinc-500 hover:text-white transition-colors">Account</Link>
         </div>
       </header>
 
@@ -97,7 +97,7 @@ export default function RakNetPage() {
 
         {unlocked ? (
           <div className="mt-8 rounded-xl border border-[#7A9E7E]/30 bg-[#7A9E7E]/10 p-5 text-sm text-[#7A9E7E]">
-            Talmor Plus is unlocked{user?.email ? ` for ${user.email}` : ''}. Premium downloads are available in the dashboard.
+            Talmor Plus is unlocked{user?.email ? ` for ${user.email}` : ''}. Premium options are on your account.
           </div>
         ) : (
           <>

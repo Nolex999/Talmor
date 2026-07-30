@@ -6,11 +6,13 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import { Suspense } from 'react';
+import SiteBackdrop from '@/components/SiteBackdrop';
 
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const initialTab = params.get('tab') === 'register' ? 'register' : 'login';
+  const nextPath = params.get('next') || '/account';
   const supabase = createClient();
   const [activeTab, setActiveTab] = useState<'login' | 'register'>(initialTab);
   const [showPassword, setShowPassword] = useState(false);
@@ -42,13 +44,13 @@ function LoginForm() {
           setIsSubmitting(false);
           return;
         }
-        router.push('/dashboard');
+        router.push(nextPath.startsWith('/') ? nextPath : '/account');
       } else {
         const { error: authError } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/dashboard`,
+            emailRedirectTo: `${window.location.origin}/account`,
             data: { username: email.split('@')[0] },
           },
         });
@@ -75,12 +77,8 @@ function LoginForm() {
   );
 
   return (
-    <div className="min-h-screen bg-black text-zinc-100 flex flex-col">
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full opacity-[0.03]"
-          style={{ background: 'radial-gradient(circle, #7A9E7E 0%, transparent 70%)', animation: 'float 8s ease-in-out infinite' }}
-        />
-      </div>
+    <div className="min-h-screen bg-black text-zinc-100 flex flex-col relative overflow-hidden">
+      <SiteBackdrop />
 
       <header className="site-nav relative z-50">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-5">
@@ -93,10 +91,10 @@ function LoginForm() {
       </header>
 
       <div className="relative z-10 flex flex-1 items-center justify-center px-5 py-16">
-        <div className="w-full max-w-md rounded-xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-xl p-6 sm:p-8">
+        <div className="w-full max-w-md rounded-xl border border-zinc-900 bg-black/40 backdrop-blur-xl p-6 sm:p-8">
           <h1 className="text-2xl font-semibold text-white">{title}</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Free forever. Login required to download.
+            Free forever. Account required to download — no activation keys.
           </p>
 
           <div className="mt-6 flex gap-2 rounded-lg border border-zinc-900 bg-black p-1">
