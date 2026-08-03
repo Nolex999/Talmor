@@ -79,9 +79,29 @@ export default function AccountPage() {
       }
 
       if (!cancelled) setLoading(false);
+
+      // LootLabs returns here with ?plus=1 — refresh profile a few times.
+      if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('plus') === '1') {
+        for (let i = 0; i < 4; i++) {
+          await new Promise((r) => setTimeout(r, 1500));
+          if (cancelled) return;
+          try {
+            const p = await getUserProfile();
+            if (p) setProfile(p);
+            if (
+              p?.license_key &&
+              p.key_expires_at &&
+              new Date(p.key_expires_at).getTime() > Date.now()
+            ) {
+              showToast('Talmor Plus unlocked');
+              break;
+            }
+          } catch {}
+        }
+      }
     })();
     return () => { cancelled = true; };
-  }, [router]);
+  }, [router, showToast]);
 
   async function handleSaveUsername() {
     if (!usernameEdit.trim()) return;
@@ -104,17 +124,32 @@ export default function AccountPage() {
 
   function handleDownload() {
     if (!DOWNLOAD_URL) {
-      showToast('Download link not configured yet — check back soon.');
+      showToast('Download will be available soon.');
       return;
     }
     window.location.href = DOWNLOAD_URL;
+  }
+
+  const plusActive =
+    !!profile?.license_key &&
+    !!profile.key_expires_at &&
+    new Date(profile.key_expires_at).getTime() > Date.now();
+
+  async function copyPlusKey() {
+    if (!profile?.license_key) return;
+    try {
+      await navigator.clipboard.writeText(profile.license_key);
+      showToast('Key copied');
+    } catch {
+      showToast('Could not copy');
+    }
   }
 
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center relative">
         <SiteBackdrop />
-        <Image src="/logo.svg" alt="Talmor" width={48} height={48} className="relative z-10 opacity-50 animate-pulse" />
+        <Image src="/logo.png" alt="Talmor" width={48} height={48} className="relative z-10 opacity-50 animate-pulse" />
       </div>
     );
   }
@@ -135,7 +170,7 @@ export default function AccountPage() {
       <div className="relative z-10 border-b border-zinc-900/80 site-nav">
         <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
-            <Image src="/logo.svg" alt="Talmor" width={28} height={28} />
+            <Image src="/logo.png" alt="Talmor" width={28} height={28} />
             <span className="text-sm font-semibold tracking-tight">Talmor</span>
           </Link>
 
@@ -228,13 +263,13 @@ export default function AccountPage() {
           </div>
         </section>
 
-        {/* Free download — no keys */}
+        {/* Free download */}
         <section id="download" className="max-w-md mx-auto animate-fade-in">
           <div className="rounded-2xl border border-zinc-900 bg-black/40 backdrop-blur-xl p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#7A9E7E]">Free</p>
             <h2 className="mt-2 text-lg font-semibold text-white">Download Talmor</h2>
             <p className="mt-2 text-sm text-zinc-500">
-              Your account is enough. No activation key — download and sign in on the desktop app.
+              Sign in on the desktop app with the same account. Talmor Plus is optional.
             </p>
             <button
               onClick={handleDownload}
@@ -242,11 +277,6 @@ export default function AccountPage() {
             >
               Download Windows x64
             </button>
-            {!DOWNLOAD_URL && (
-              <p className="mt-3 text-[11px] text-zinc-600 text-center">
-                Set <code className="text-zinc-500">NEXT_PUBLIC_DOWNLOAD_URL</code> to enable the file link.
-              </p>
-            )}
           </div>
         </section>
 
@@ -254,13 +284,31 @@ export default function AccountPage() {
         <section id="plus" className="max-w-md mx-auto animate-fade-in">
           <div className="text-center mb-5">
             <h2 className="text-lg font-semibold text-white">Talmor Plus</h2>
-            <p className="text-sm text-zinc-500 mt-1">Optional premium unlock via partners.</p>
+            <p className="text-sm text-zinc-500 mt-1">
+              Complete a partner offer to get a 24-hour activation key.
+            </p>
           </div>
 
-          {profile?.raknet_unlocked ? (
-            <div className="rounded-2xl border border-[#7A9E7E]/20 bg-[#7A9E7E]/5 p-6 text-center">
-              <p className="text-[#7A9E7E] font-semibold">Talmor Plus is unlocked</p>
-              <p className="text-xs text-zinc-500 mt-2">Premium options are available on your account.</p>
+          {plusActive ? (
+            <div className="rounded-2xl border border-[#7A9E7E]/20 bg-[#7A9E7E]/5 p-6">
+              <p className="text-[#7A9E7E] font-semibold text-center">Talmor Plus active</p>
+              <p className="text-[10px] uppercase tracking-wider text-zinc-500 mt-4 mb-2">Activation key</p>
+              <p className="font-mono text-base text-white tracking-wider break-all select-all">
+                {profile?.license_key}
+              </p>
+              <p className="text-xs text-zinc-500 mt-2">
+                Expires {profile?.key_expires_at ? new Date(profile.key_expires_at).toLocaleString() : '—'}
+              </p>
+              <button
+                type="button"
+                onClick={copyPlusKey}
+                className="mt-4 w-full rounded-lg border border-zinc-800 bg-black/40 py-2 text-xs text-zinc-300 hover:text-white transition-colors"
+              >
+                Copy key
+              </button>
+              <p className="text-[11px] text-zinc-600 mt-3 text-center">
+                Paste this key in the Talmor desktop app after signing in.
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -272,7 +320,7 @@ export default function AccountPage() {
               >
                 <div>
                   <p className="text-sm font-medium text-white">Work.ink</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">Complete an offer to unlock</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">Complete an offer · get a 24h key</p>
                 </div>
                 <span className="text-sm text-[#7A9E7E] group-hover:translate-x-1 transition-transform">&#8594;</span>
               </a>
@@ -284,7 +332,7 @@ export default function AccountPage() {
               >
                 <div>
                   <p className="text-sm font-medium text-white">LootLabs</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">Complete an offer to unlock</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">Complete an offer · get a 24h key</p>
                 </div>
                 <span className="text-sm text-[#7A9E7E] group-hover:translate-x-1 transition-transform">&#8594;</span>
               </a>

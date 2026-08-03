@@ -8,14 +8,14 @@ export const metadata: Metadata = {
   },
   applicationName: "Talmor",
   description:
-    "Talmor is free. Fast Luau scripting for Roblox. Sign in to download — no activation keys. Premium unlock via Work.ink / LootLabs.",
+    "Talmor is a Luau executor for Roblox. Fast, free, built to stay out of your way. Optional 24h Plus keys via Work.ink or LootLabs.",
   icons: {
     icon: [
-      { url: "/favicon.ico?v=3", sizes: "any" },
-      { url: "/logo.png?v=3", type: "image/png", sizes: "1024x1024" },
+      { url: "/favicon.ico?v=4", sizes: "any" },
+      { url: "/logo.png?v=4", type: "image/png", sizes: "512x512" },
     ],
-    shortcut: "/favicon.ico?v=3",
-    apple: "/logo.png?v=3",
+    shortcut: "/favicon.ico?v=4",
+    apple: "/logo.png?v=4",
   },
 };
 

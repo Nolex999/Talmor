@@ -83,7 +83,7 @@ function LoginForm() {
       <header className="site-nav relative z-50">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-5">
           <Link href="/" className="flex items-center gap-3 font-semibold text-white">
-            <Image src="/logo.svg" alt="Talmor" width={32} height={32} />
+            <Image src="/logo.png" alt="Talmor" width={32} height={32} />
             <span className="text-base">Talmor</span>
           </Link>
           <Link href="/" className="text-sm text-zinc-500 hover:text-white transition-colors">&larr; Back</Link>
@@ -94,7 +94,7 @@ function LoginForm() {
         <div className="w-full max-w-md rounded-xl border border-zinc-900 bg-black/40 backdrop-blur-xl p-6 sm:p-8">
           <h1 className="text-2xl font-semibold text-white">{title}</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Free forever. Account required to download — no activation keys.
+            Free forever. Account required to download. Plus keys are optional.
           </p>
 
           <div className="mt-6 flex gap-2 rounded-lg border border-zinc-900 bg-black p-1">

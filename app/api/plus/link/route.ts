@@ -77,7 +77,8 @@ async function buildLootlabsUrl(uid: string): Promise<string> {
           (data?.message?.short ? `https://loot-link.com/s?${data.message.short}` : '');
         if (lootUrl) {
           const join = lootUrl.includes('?') ? '&' : '?';
-          return `${lootUrl}${join}puid=${encodeURIComponent(uid)}`;
+          // click_id is the usual LootLabs postback macro; puid is our fallback.
+          return `${lootUrl}${join}click_id=${encodeURIComponent(uid)}&puid=${encodeURIComponent(uid)}`;
         }
       }
     } catch {
@@ -87,7 +88,7 @@ async function buildLootlabsUrl(uid: string): Promise<string> {
 
   if (LOOTLABS_FALLBACK) {
     const join = LOOTLABS_FALLBACK.includes('?') ? '&' : '?';
-    return `${LOOTLABS_FALLBACK}${join}puid=${encodeURIComponent(uid)}`;
+    return `${LOOTLABS_FALLBACK}${join}click_id=${encodeURIComponent(uid)}&puid=${encodeURIComponent(uid)}`;
   }
 
   // No LootLabs config yet — send user to account Plus section

@@ -10,7 +10,7 @@ export default function PrivacyPage() {
       <div className="w-full max-w-2xl relative z-10">
         <div className="rounded-xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-xl p-8 sm:p-10">
             <div className="flex justify-center mb-5">
-              <img src="/logo.svg" alt="Talmor" className="w-12 h-12 object-contain" />
+              <img src="/logo.png" alt="Talmor" className="w-12 h-12 object-contain" />
             </div>
 
             <h1 className="font-display text-2xl font-bold text-center mb-2 text-white tracking-tight">Privacy Policy</h1>
