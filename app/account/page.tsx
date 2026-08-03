@@ -15,8 +15,20 @@ import {
 import SiteBackdrop from '@/components/SiteBackdrop';
 
 const WORKINK_FALLBACK = process.env.NEXT_PUBLIC_WORKINK_URL || 'https://work.ink/2Na9/talmor-executor';
-const LOOTLABS_FALLBACK = process.env.NEXT_PUBLIC_LOOTLABS_URL || 'https://lootlabs.gg/talmor-plus';
+const LOOTLABS_FALLBACK = process.env.NEXT_PUBLIC_LOOTLABS_URL || '';
 const DOWNLOAD_URL = process.env.NEXT_PUBLIC_DOWNLOAD_URL || '';
+
+function isExternalPartnerUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+    if (typeof window !== 'undefined' && u.host === window.location.host) return false;
+    if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export default function AccountPage() {
   const router = useRouter();
@@ -64,16 +76,27 @@ export default function AccountPage() {
         const wData = await wRes.json();
         const lData = await lRes.json();
         if (!cancelled) {
+          const workink =
+            (wData.ok && typeof wData.url === 'string' && wData.url) ||
+            `${WORKINK_FALLBACK}?ref=${u.id.slice(0, 8)}`;
+          const lootlabsCandidate =
+            (lData.ok && typeof lData.url === 'string' && lData.url) ||
+            (LOOTLABS_FALLBACK
+              ? `${LOOTLABS_FALLBACK}${LOOTLABS_FALLBACK.includes('?') ? '&' : '?'}puid=${encodeURIComponent(u.id)}`
+              : '');
           setPlusLinks({
-            workink: wData.url || `${WORKINK_FALLBACK}?ref=${u.id.slice(0, 8)}`,
-            lootlabs: lData.url || `${LOOTLABS_FALLBACK}?ref=${u.id.slice(0, 8)}`,
+            workink,
+            lootlabs: isExternalPartnerUrl(lootlabsCandidate) ? lootlabsCandidate : '',
           });
         }
       } catch {
         if (!cancelled) {
           setPlusLinks({
             workink: `${WORKINK_FALLBACK}?ref=${u.id.slice(0, 8)}`,
-            lootlabs: `${LOOTLABS_FALLBACK}?ref=${u.id.slice(0, 8)}`,
+            lootlabs:
+              LOOTLABS_FALLBACK && isExternalPartnerUrl(LOOTLABS_FALLBACK)
+                ? `${LOOTLABS_FALLBACK}${LOOTLABS_FALLBACK.includes('?') ? '&' : '?'}puid=${encodeURIComponent(u.id)}`
+                : '',
           });
         }
       }
@@ -155,7 +178,8 @@ export default function AccountPage() {
   }
 
   const workinkUrl = plusLinks?.workink || `${WORKINK_FALLBACK}?ref=${user?.id?.slice(0, 8) || ''}`;
-  const lootlabsUrl = plusLinks?.lootlabs || `${LOOTLABS_FALLBACK}?ref=${user?.id?.slice(0, 8) || ''}`;
+  const lootlabsUrl = plusLinks?.lootlabs || '';
+  const lootlabsReady = !!lootlabsUrl && isExternalPartnerUrl(lootlabsUrl);
 
   return (
     <div className="min-h-screen bg-black text-white relative overflow-hidden">
@@ -324,18 +348,32 @@ export default function AccountPage() {
                 </div>
                 <span className="text-sm text-[#7A9E7E] group-hover:translate-x-1 transition-transform">&#8594;</span>
               </a>
-              <a
-                href={lootlabsUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center justify-between rounded-xl border border-zinc-900 bg-black/40 p-4 hover:border-[#7A9E7E]/40 hover:bg-[#7A9E7E]/5 transition-all group"
-              >
-                <div>
-                  <p className="text-sm font-medium text-white">LootLabs</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">Complete an offer · get a 24h key</p>
-                </div>
-                <span className="text-sm text-[#7A9E7E] group-hover:translate-x-1 transition-transform">&#8594;</span>
-              </a>
+              {lootlabsReady ? (
+                <a
+                  href={lootlabsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-between rounded-xl border border-zinc-900 bg-black/40 p-4 hover:border-[#7A9E7E]/40 hover:bg-[#7A9E7E]/5 transition-all group"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-white">LootLabs</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">Complete an offer · get a 24h key</p>
+                  </div>
+                  <span className="text-sm text-[#7A9E7E] group-hover:translate-x-1 transition-transform">&#8594;</span>
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => showToast('LootLabs link not configured yet')}
+                  className="flex w-full items-center justify-between rounded-xl border border-zinc-900 bg-black/40 p-4 text-left opacity-60 cursor-not-allowed"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-white">LootLabs</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">Unavailable until locker URL / API token is set</p>
+                  </div>
+                  <span className="text-sm text-zinc-600">—</span>
+                </button>
+              )}
             </div>
           )}
         </section>

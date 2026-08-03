@@ -38,14 +38,35 @@ async function buildWorkinkUrl(uid: string): Promise<string> {
   return `${WORKINK_BASE_URL}${join}ref=${uid.slice(0, 8)}`;
 }
 
+function withLootlabsUid(base: string, uid: string): string {
+  const join = base.includes('?') ? '&' : '?';
+  // puid is what LootLabs echoes back as click_id on postback.
+  return `${base}${join}puid=${encodeURIComponent(uid)}`;
+}
+
+function isExternalLootUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+    const siteHost = new URL(SITE_URL).host;
+    if (u.host === siteHost) return false;
+    if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * LootLabs content locker:
  * POST https://creators.lootlabs.gg/api/public/content_locker
  * Auth: Bearer LOOTLABS_API_TOKEN
  * Then append &puid=<uid> so postback click_id maps to the user.
  * @see https://help.lootlabs.gg/en/article/lootlabs-api-documentation-1k0hn73/
+ *
+ * Never returns a same-site URL — that made the LootLabs button look broken.
  */
-async function buildLootlabsUrl(uid: string): Promise<string> {
+async function buildLootlabsUrl(uid: string): Promise<string | null> {
   const destination = `${SITE_URL}/account?plus=1`;
 
   if (LOOTLABS_API_TOKEN) {
@@ -75,24 +96,20 @@ async function buildLootlabsUrl(uid: string): Promise<string> {
           data?.message?.loot_url ||
           data?.loot_url ||
           (data?.message?.short ? `https://loot-link.com/s?${data.message.short}` : '');
-        if (lootUrl) {
-          const join = lootUrl.includes('?') ? '&' : '?';
-          // click_id is the usual LootLabs postback macro; puid is our fallback.
-          return `${lootUrl}${join}click_id=${encodeURIComponent(uid)}&puid=${encodeURIComponent(uid)}`;
+        if (lootUrl && isExternalLootUrl(lootUrl)) {
+          return withLootlabsUid(lootUrl, uid);
         }
       }
     } catch {
-      // fall through
+      // fall through to static locker URL
     }
   }
 
-  if (LOOTLABS_FALLBACK) {
-    const join = LOOTLABS_FALLBACK.includes('?') ? '&' : '?';
-    return `${LOOTLABS_FALLBACK}${join}click_id=${encodeURIComponent(uid)}&puid=${encodeURIComponent(uid)}`;
+  if (LOOTLABS_FALLBACK && isExternalLootUrl(LOOTLABS_FALLBACK)) {
+    return withLootlabsUid(LOOTLABS_FALLBACK, uid);
   }
 
-  // No LootLabs config yet — send user to account Plus section
-  return `${SITE_URL}/account#plus`;
+  return null;
 }
 
 export async function POST(request: NextRequest) {
@@ -103,11 +120,22 @@ export async function POST(request: NextRequest) {
     }
 
     const platform = source === 'lootlabs' ? 'lootlabs' : 'workink';
-    const url =
-      platform === 'lootlabs'
-        ? await buildLootlabsUrl(uid)
-        : await buildWorkinkUrl(uid);
+    if (platform === 'lootlabs') {
+      const url = await buildLootlabsUrl(uid);
+      if (!url) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              'LootLabs not configured. Set LOOTLABS_API_TOKEN or NEXT_PUBLIC_LOOTLABS_URL (loot-link.com).',
+          },
+          { status: 503 },
+        );
+      }
+      return NextResponse.json({ ok: true, url });
+    }
 
+    const url = await buildWorkinkUrl(uid);
     return NextResponse.json({ ok: true, url });
   } catch {
     return NextResponse.json({ ok: false, error: 'Invalid request' }, { status: 400 });
