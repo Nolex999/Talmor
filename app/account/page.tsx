@@ -300,10 +300,17 @@ export default function AccountPage() {
                 <p className="mono-label !text-amber-200/80">LootLabs</p>
                 <p className="mt-2 font-display text-xl font-bold text-white">Offer done — Plus not activated</p>
                 <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
-                  You were redirected back, but no key was granted. That means the LootLabs{' '}
-                  <strong className="text-white/80">postback</strong> never hit our API (missing secret on
-                  Vercel / wrong URL in the LootLabs Advanced tab). Fix the postback, then run an offer again —
-                  or use Work.ink below.
+                  Redirect alone does nothing if the locker still points at{' '}
+                  <code className="text-white/70">/account</code>. After deploy, click LootLabs again —
+                  we now create a fresh locker that returns through a signed unlock URL. Also set this
+                  exact postback in LootLabs Advanced (LootLabs appends click_id itself):
+                </p>
+                <p className="mt-3 break-all font-mono text-[11px] text-amber-100/90">
+                  https://talmor.top/api/plus/lootlabs?secret=YOUR_SECRET
+                </p>
+                <p className="mt-2 text-xs text-[var(--muted)]">
+                  Same value as <code className="text-white/70">LOOTLABS_POSTBACK_SECRET</code> on Vercel.
+                  Or use Work.ink below.
                 </p>
               </div>
             )}
@@ -377,7 +384,7 @@ export default function AccountPage() {
                   >
                     <div>
                       <p className="text-sm font-semibold text-white">LootLabs</p>
-                      <p className="mt-0.5 text-xs text-[var(--muted)]">Tasks · returns here when postback fires</p>
+                      <p className="mt-0.5 text-xs text-[var(--muted)]">Tasks · signed return unlocks Plus</p>
                     </div>
                     <span className="text-[var(--accent-bright)] transition-transform group-hover:translate-x-0.5">→</span>
                   </a>

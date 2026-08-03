@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { lootlabsSigningSecret, signLootlabsReturn } from '@/lib/lootlabs-sign';
 
 const WORKINK_BASE_URL =
   process.env.NEXT_PUBLIC_WORKINK_URL || 'https://work.ink/2Na9/talmor-executor';
@@ -57,17 +58,23 @@ function isExternalLootUrl(url: string): boolean {
   }
 }
 
+function lootlabsDestination(uid: string): string {
+  const site = SITE_URL.replace(/\/$/, '');
+  const secret = lootlabsSigningSecret();
+  if (secret) {
+    const { exp, sig } = signLootlabsReturn(uid, secret);
+    return `${site}/api/plus/lootlabs/complete?uid=${encodeURIComponent(uid)}&exp=${encodeURIComponent(exp)}&sig=${encodeURIComponent(sig)}`;
+  }
+  return `${site}/account?plus=1&from=lootlabs`;
+}
+
 /**
- * LootLabs content locker:
- * POST https://creators.lootlabs.gg/api/public/content_locker
- * Auth: Bearer LOOTLABS_API_TOKEN
- * Then append &puid=<uid> so postback click_id maps to the user.
- * @see https://help.lootlabs.gg/en/article/lootlabs-api-documentation-1k0hn73/
- *
- * Never returns a same-site URL — that made the LootLabs button look broken.
+ * Prefer API locker with a signed complete URL as destination so Plus unlocks
+ * on browser return even when S2S postback is misconfigured.
+ * Static NEXT_PUBLIC_LOOTLABS_URL is fallback only (needs panel postback).
  */
 async function buildLootlabsUrl(uid: string): Promise<string | null> {
-  const destination = `${SITE_URL}/account?plus=1&from=lootlabs`;
+  const destination = lootlabsDestination(uid);
 
   if (LOOTLABS_API_TOKEN) {
     try {
@@ -127,7 +134,7 @@ export async function POST(request: NextRequest) {
           {
             ok: false,
             error:
-              'LootLabs not configured. Set LOOTLABS_API_TOKEN or NEXT_PUBLIC_LOOTLABS_URL (loot-link.com).',
+              'LootLabs not configured. Set LOOTLABS_API_TOKEN + LOOTLABS_POSTBACK_SECRET (or NEXT_PUBLIC_LOOTLABS_URL).',
           },
           { status: 503 },
         );
