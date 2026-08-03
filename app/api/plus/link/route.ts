@@ -67,7 +67,7 @@ function isExternalLootUrl(url: string): boolean {
  * Never returns a same-site URL — that made the LootLabs button look broken.
  */
 async function buildLootlabsUrl(uid: string): Promise<string | null> {
-  const destination = `${SITE_URL}/account?plus=1`;
+  const destination = `${SITE_URL}/account?plus=1&from=lootlabs`;
 
   if (LOOTLABS_API_TOKEN) {
     try {

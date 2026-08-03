@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -17,6 +17,7 @@ import SiteBackdrop from '@/components/SiteBackdrop';
 const WORKINK_FALLBACK = process.env.NEXT_PUBLIC_WORKINK_URL || 'https://work.ink/2Na9/talmor-executor';
 const LOOTLABS_FALLBACK = process.env.NEXT_PUBLIC_LOOTLABS_URL || '';
 const DOWNLOAD_URL = process.env.NEXT_PUBLIC_DOWNLOAD_URL || '';
+const DOCS_URL = process.env.NEXT_PUBLIC_DOCS_URL || 'http://localhost:3001';
 
 function isExternalPartnerUrl(url: string): boolean {
   try {
@@ -30,20 +31,47 @@ function isExternalPartnerUrl(url: string): boolean {
   }
 }
 
+function isPlusActive(profile: DbUser | null): boolean {
+  if (!profile?.license_key || !profile.key_expires_at) return false;
+  const t = new Date(profile.key_expires_at).getTime();
+  return !Number.isNaN(t) && t > Date.now();
+}
+
+function formatRemaining(expiresAt: string | null | undefined): string {
+  if (!expiresAt) return '';
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  if (ms <= 0) return 'Expired';
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  if (h >= 24) {
+    const d = Math.floor(h / 24);
+    return `${d}d ${h % 24}h left`;
+  }
+  return `${h}h ${m}m left`;
+}
+
+type UnlockPhase = 'idle' | 'waiting' | 'ready' | 'failed';
+
 export default function AccountPage() {
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<DbUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [toast, setToast] = useState('');
   const [usernameEdit, setUsernameEdit] = useState('');
   const [saving, setSaving] = useState(false);
   const [plusLinks, setPlusLinks] = useState<{ workink: string; lootlabs: string } | null>(null);
+  const [unlockPhase, setUnlockPhase] = useState<UnlockPhase>('idle');
+  const [now, setNow] = useState(() => Date.now());
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(''), 3000);
+    setTimeout(() => setToast(''), 3200);
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -51,14 +79,21 @@ export default function AccountPage() {
     (async () => {
       const u = await getAuthUser();
       if (cancelled) return;
-      if (!u) { router.replace('/login?next=/account'); return; }
+      if (!u) {
+        router.replace('/login?next=/account');
+        return;
+      }
       setUser(u);
+
+      let p: DbUser | null = null;
       try {
-        const p = await getUserProfile();
+        p = await getUserProfile();
         if (cancelled) return;
         setProfile(p);
         if (p?.username) setUsernameEdit(p.username);
-      } catch {}
+      } catch {
+        /* ignore */
+      }
 
       try {
         const [wRes, lRes] = await Promise.all([
@@ -103,27 +138,40 @@ export default function AccountPage() {
 
       if (!cancelled) setLoading(false);
 
-      // LootLabs returns here with ?plus=1 — refresh profile a few times.
-      if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('plus') === '1') {
-        for (let i = 0; i < 4; i++) {
-          await new Promise((r) => setTimeout(r, 1500));
-          if (cancelled) return;
-          try {
-            const p = await getUserProfile();
-            if (p) setProfile(p);
-            if (
-              p?.license_key &&
-              p.key_expires_at &&
-              new Date(p.key_expires_at).getTime() > Date.now()
-            ) {
-              showToast('Talmor Plus unlocked');
-              break;
-            }
-          } catch {}
+      const params = new URLSearchParams(window.location.search);
+      const fromPlus = params.get('plus') === '1' || params.get('from') === 'lootlabs';
+      if (!fromPlus) return;
+
+      if (isPlusActive(p)) {
+        setUnlockPhase('ready');
+        showToast('Talmor Plus is active');
+        history.replaceState(null, '', '/account#plus');
+        return;
+      }
+
+      setUnlockPhase('waiting');
+      history.replaceState(null, '', '/account#plus');
+
+      for (let i = 0; i < 10; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        if (cancelled) return;
+        try {
+          const next = await getUserProfile();
+          if (next) setProfile(next);
+          if (isPlusActive(next)) {
+            setUnlockPhase('ready');
+            showToast('Talmor Plus unlocked');
+            return;
+          }
+        } catch {
+          /* ignore */
         }
       }
+      if (!cancelled) setUnlockPhase('failed');
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [router, showToast]);
 
   async function handleSaveUsername() {
@@ -147,16 +195,11 @@ export default function AccountPage() {
 
   function handleDownload() {
     if (!DOWNLOAD_URL) {
-      showToast('Download will be available soon.');
+      showToast('Download will be available soon');
       return;
     }
     window.location.href = DOWNLOAD_URL;
   }
-
-  const plusActive =
-    !!profile?.license_key &&
-    !!profile.key_expires_at &&
-    new Date(profile.key_expires_at).getTime() > Date.now();
 
   async function copyPlusKey() {
     if (!profile?.license_key) return;
@@ -168,216 +211,222 @@ export default function AccountPage() {
     }
   }
 
+  const plusActive = useMemo(() => isPlusActive(profile), [profile, now]);
+  const remaining = plusActive ? formatRemaining(profile?.key_expires_at) : '';
+  const workinkUrl = plusLinks?.workink || `${WORKINK_FALLBACK}?ref=${user?.id?.slice(0, 8) || ''}`;
+  const lootlabsUrl = plusLinks?.lootlabs || '';
+  const lootlabsReady = !!lootlabsUrl && isExternalPartnerUrl(lootlabsUrl);
+  const displayName = profile?.username || user?.email?.split('@')[0] || 'Operator';
+  const initial = (displayName[0] || '?').toUpperCase();
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center relative">
+      <div className="min-h-screen relative overflow-hidden flex items-center justify-center">
         <SiteBackdrop />
-        <Image src="/logo.png" alt="Talmor" width={48} height={48} className="relative z-10 opacity-50 animate-pulse" />
+        <Image src="/logo.png" alt="Talmor" width={44} height={44} className="relative z-10 opacity-50 animate-pulse" />
       </div>
     );
   }
 
-  const workinkUrl = plusLinks?.workink || `${WORKINK_FALLBACK}?ref=${user?.id?.slice(0, 8) || ''}`;
-  const lootlabsUrl = plusLinks?.lootlabs || '';
-  const lootlabsReady = !!lootlabsUrl && isExternalPartnerUrl(lootlabsUrl);
-
   return (
-    <div className="min-h-screen bg-black text-white relative overflow-hidden">
+    <div className="min-h-screen relative overflow-hidden text-[var(--fg)]">
       <SiteBackdrop />
 
       {toast && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-full bg-zinc-900 border border-zinc-800 text-xs text-white animate-fade-in shadow-lg">
+        <div className="fixed top-6 left-1/2 z-50 -translate-x-1/2 rounded-full border border-[var(--border-strong)] bg-[var(--bg-elevated)]/95 px-5 py-2.5 text-xs text-white shadow-lg backdrop-blur-xl">
           {toast}
         </div>
       )}
 
-      <div className="relative z-10 border-b border-zinc-900/80 site-nav">
-        <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
+      <header className="site-nav sticky top-0 z-40 relative">
+        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-5">
           <Link href="/" className="flex items-center gap-3">
             <Image src="/logo.png" alt="Talmor" width={28} height={28} />
-            <span className="text-sm font-semibold tracking-tight">Talmor</span>
+            <span className="font-display text-sm font-bold tracking-tight text-white">Talmor</span>
           </Link>
-
-          <div className="flex items-center gap-4">
-            <Link href="/" className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors">Home</Link>
-            <div className="relative">
-              <button
-                onClick={() => setMenuOpen(!menuOpen)}
-                className="flex items-center gap-2.5 rounded-full border border-zinc-800 bg-zinc-900/50 px-3 py-1.5 text-sm hover:border-zinc-700 transition-colors"
-              >
-                <div className="h-7 w-7 rounded-full bg-[#7A9E7E]/20 flex items-center justify-center text-xs font-semibold text-[#7A9E7E]">
-                  {(user?.email?.[0] || '?').toUpperCase()}
-                </div>
-                <span className="text-xs text-zinc-300 hidden sm:block max-w-[160px] truncate">{user?.email}</span>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-zinc-500 transition-transform ${menuOpen ? 'rotate-180' : ''}`}>
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-
-              {menuOpen && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-56 z-20 rounded-xl border border-zinc-800 bg-zinc-950/95 backdrop-blur-xl shadow-2xl overflow-hidden">
-                    <div className="px-4 py-3 border-b border-zinc-800">
-                      <p className="text-xs text-zinc-400 truncate">{user?.email}</p>
-                    </div>
-                    <a href="#download" onClick={() => setMenuOpen(false)} className="block w-full text-left px-4 py-2.5 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">
-                      Download
-                    </a>
-                    <a href="#plus" onClick={() => setMenuOpen(false)} className="block w-full text-left px-4 py-2.5 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">
-                      Talmor Plus
-                    </a>
-                    <Link href="/support" className="block px-4 py-2.5 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">
-                      Support
-                    </Link>
-                    <div className="border-t border-zinc-800">
-                      <button
-                        onClick={handleLogout}
-                        className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
-                      >
-                        Log out
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+          <nav className="flex items-center gap-5 text-[13px] text-[var(--muted)]">
+            <Link href="/" className="hover:text-white transition-colors">Home</Link>
+            <a href={DOCS_URL} target="_blank" rel="noreferrer" className="hover:text-white transition-colors">Docs</a>
+            <Link href="/support" className="hover:text-white transition-colors">Support</Link>
+            <button type="button" onClick={handleLogout} className="hover:text-white transition-colors">
+              Log out
+            </button>
+          </nav>
         </div>
-      </div>
+      </header>
 
-      <div className="relative z-10 max-w-3xl mx-auto px-6 py-12 space-y-10">
-        {/* Profile */}
-        <section className="max-w-md mx-auto text-center animate-fade-in">
-          <div className="w-20 h-20 rounded-full bg-[#7A9E7E]/10 mx-auto mb-4 flex items-center justify-center border border-[#7A9E7E]/20">
-            <span className="text-3xl font-bold text-[#7A9E7E]">
-              {(user?.email?.[0] || '?').toUpperCase()}
-            </span>
-          </div>
-          <h1 className="text-xl font-semibold text-white">
-            {profile?.username || 'Your account'}
-          </h1>
-          <p className="text-sm text-zinc-500 mt-1">{user?.email}</p>
-          <p className="text-xs text-zinc-600 mt-1">
-            Member since {user?.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
-          </p>
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-zinc-900 px-3 py-1 border border-zinc-800">
-            <span className={`h-1.5 w-1.5 rounded-full ${profile?.role === 'owner' ? 'bg-yellow-400' : profile?.role === 'admin' ? 'bg-blue-400' : 'bg-[#7A9E7E]'}`} />
-            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{profile?.role || 'user'}</span>
-          </div>
+      <main className="relative z-10 mx-auto max-w-5xl px-5 pb-24 pt-12 sm:pt-16">
+        {/* Hero */}
+        <section className="animate-rise">
+          <p className="mono-label">Account</p>
+          <div className="mt-5 flex flex-col gap-8 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex items-center gap-5">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--accent)]/25 bg-[var(--accent-soft)] font-display text-2xl font-bold text-[var(--accent-bright)]">
+                {initial}
+              </div>
+              <div>
+                <h1 className="font-display text-4xl font-extrabold tracking-tight text-white sm:text-5xl">
+                  {displayName}
+                </h1>
+                <p className="mt-2 text-sm text-[var(--muted)]">{user?.email}</p>
+              </div>
+            </div>
 
-          <div className="mt-8 text-left">
-            <label className="block text-xs text-zinc-600 mb-1.5 tracking-wide">USERNAME</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={usernameEdit}
-                onChange={(e) => setUsernameEdit(e.target.value)}
-                className="flex-1 px-3 py-2 bg-black border border-zinc-900 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#7A9E7E] transition-colors"
-                placeholder="your_username"
-              />
-              <button
-                onClick={handleSaveUsername}
-                disabled={saving || !usernameEdit.trim()}
-                className="px-4 py-2 rounded-lg bg-[#7A9E7E]/10 text-[#7A9E7E] text-xs font-semibold hover:bg-[#7A9E7E]/20 transition-colors disabled:opacity-40"
-              >
-                {saving ? '...' : 'Save'}
-              </button>
+            <div
+              className={`inline-flex items-center gap-2 self-start rounded-full border px-4 py-2 text-xs font-semibold sm:self-auto ${
+                plusActive
+                  ? 'border-[var(--accent)]/35 bg-[var(--accent-soft)] text-[var(--accent-bright)]'
+                  : 'border-[var(--border-strong)] bg-white/[0.03] text-[var(--muted)]'
+              }`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${plusActive ? 'bg-[var(--accent-bright)]' : 'bg-zinc-500'}`} />
+              {plusActive ? `Plus · ${remaining}` : 'Free plan'}
             </div>
           </div>
         </section>
 
-        {/* Free download */}
-        <section id="download" className="max-w-md mx-auto animate-fade-in">
-          <div className="rounded-2xl border border-zinc-900 bg-black/40 backdrop-blur-xl p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#7A9E7E]">Free</p>
-            <h2 className="mt-2 text-lg font-semibold text-white">Download Talmor</h2>
-            <p className="mt-2 text-sm text-zinc-500">
-              Sign in on the desktop app with the same account. Talmor Plus is optional.
+        {(unlockPhase === 'waiting' || unlockPhase === 'failed') && (
+          <section className="mt-10 animate-fade-in">
+            {unlockPhase === 'waiting' ? (
+              <div className="panel border-[var(--accent)]/25 bg-[var(--accent-soft)] px-6 py-5">
+                <p className="mono-label">LootLabs</p>
+                <p className="mt-2 font-display text-xl font-bold text-white">Unlocking Plus…</p>
+                <p className="mt-2 text-sm text-[var(--muted)]">
+                  Waiting for the partner postback. This usually takes a few seconds.
+                </p>
+              </div>
+            ) : (
+              <div className="panel border-amber-500/25 bg-amber-500/[0.06] px-6 py-5">
+                <p className="mono-label !text-amber-200/80">LootLabs</p>
+                <p className="mt-2 font-display text-xl font-bold text-white">Offer done — Plus not activated</p>
+                <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
+                  You were redirected back, but no key was granted. That means the LootLabs{' '}
+                  <strong className="text-white/80">postback</strong> never hit our API (missing secret on
+                  Vercel / wrong URL in the LootLabs Advanced tab). Fix the postback, then run an offer again —
+                  or use Work.ink below.
+                </p>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Plan + Download */}
+        <section className="mt-14 grid gap-5 lg:grid-cols-2">
+          <div id="download" className="panel animate-fade-in p-8">
+            <p className="mono-label">Download</p>
+            <h2 className="font-display mt-3 text-3xl font-bold text-white">Get Talmor</h2>
+            <p className="mt-3 text-sm leading-relaxed text-[var(--muted)]">
+              Windows x64 build. Sign in on desktop with this same account. Core stays free.
             </p>
             <button
+              type="button"
               onClick={handleDownload}
-              className="mt-5 w-full btn-white py-2.5 text-sm font-semibold"
+              className="btn-white mt-8 inline-flex px-7 py-3 text-sm"
             >
               Download Windows x64
             </button>
           </div>
-        </section>
 
-        {/* Plus */}
-        <section id="plus" className="max-w-md mx-auto animate-fade-in">
-          <div className="text-center mb-5">
-            <h2 className="text-lg font-semibold text-white">Talmor Plus</h2>
-            <p className="text-sm text-zinc-500 mt-1">
-              Complete a partner offer to get a 24-hour activation key.
+          <div id="plus" className="panel animate-fade-in p-8 [animation-delay:80ms]">
+            <p className="mono-label">Plan</p>
+            <h2 className="font-display mt-3 text-3xl font-bold text-white">
+              {plusActive ? 'Talmor Plus' : 'Unlock Plus'}
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-[var(--muted)]">
+              {plusActive
+                ? 'Your 24-hour key is ready. Paste it in the desktop app after sign-in.'
+                : 'Finish one partner offer. You get a 16-character key valid for 24 hours.'}
             </p>
-          </div>
 
-          {plusActive ? (
-            <div className="rounded-2xl border border-[#7A9E7E]/20 bg-[#7A9E7E]/5 p-6">
-              <p className="text-[#7A9E7E] font-semibold text-center">Talmor Plus active</p>
-              <p className="text-[10px] uppercase tracking-wider text-zinc-500 mt-4 mb-2">Activation key</p>
-              <p className="font-mono text-base text-white tracking-wider break-all select-all">
-                {profile?.license_key}
-              </p>
-              <p className="text-xs text-zinc-500 mt-2">
-                Expires {profile?.key_expires_at ? new Date(profile.key_expires_at).toLocaleString() : '—'}
-              </p>
-              <button
-                type="button"
-                onClick={copyPlusKey}
-                className="mt-4 w-full rounded-lg border border-zinc-800 bg-black/40 py-2 text-xs text-zinc-300 hover:text-white transition-colors"
-              >
-                Copy key
-              </button>
-              <p className="text-[11px] text-zinc-600 mt-3 text-center">
-                Paste this key in the Talmor desktop app after signing in.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <a
-                href={workinkUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center justify-between rounded-xl border border-zinc-900 bg-black/40 p-4 hover:border-[#7A9E7E]/40 hover:bg-[#7A9E7E]/5 transition-all group"
-              >
-                <div>
-                  <p className="text-sm font-medium text-white">Work.ink</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">Complete an offer · get a 24h key</p>
+            {plusActive ? (
+              <div className="mt-8 space-y-4">
+                <div className="rounded-2xl border border-[var(--accent)]/30 bg-black/30 px-5 py-4">
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">Activation key</p>
+                  <p className="mt-2 font-mono text-lg tracking-[0.18em] text-white break-all select-all">
+                    {profile?.license_key}
+                  </p>
+                  <p className="mt-2 text-xs text-[var(--muted)]">
+                    Expires {profile?.key_expires_at ? new Date(profile.key_expires_at).toLocaleString() : '—'}
+                    {remaining ? ` · ${remaining}` : ''}
+                  </p>
                 </div>
-                <span className="text-sm text-[#7A9E7E] group-hover:translate-x-1 transition-transform">&#8594;</span>
-              </a>
-              {lootlabsReady ? (
+                <button type="button" onClick={copyPlusKey} className="btn-primary px-6 py-2.5 text-sm">
+                  Copy key
+                </button>
+              </div>
+            ) : (
+              <div className="mt-8 space-y-3">
                 <a
-                  href={lootlabsUrl}
+                  href={workinkUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-between rounded-xl border border-zinc-900 bg-black/40 p-4 hover:border-[#7A9E7E]/40 hover:bg-[#7A9E7E]/5 transition-all group"
+                  className="group flex items-center justify-between rounded-2xl border border-[var(--border)] bg-black/25 px-5 py-4 transition-colors hover:border-[var(--accent)]/40"
                 >
                   <div>
-                    <p className="text-sm font-medium text-white">LootLabs</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">Complete an offer · get a 24h key</p>
+                    <p className="text-sm font-semibold text-white">Work.ink</p>
+                    <p className="mt-0.5 text-xs text-[var(--muted)]">Offer wall · lands on verify with your key</p>
                   </div>
-                  <span className="text-sm text-[#7A9E7E] group-hover:translate-x-1 transition-transform">&#8594;</span>
+                  <span className="text-[var(--accent-bright)] transition-transform group-hover:translate-x-0.5">→</span>
                 </a>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => showToast('LootLabs link not configured yet')}
-                  className="flex w-full items-center justify-between rounded-xl border border-zinc-900 bg-black/40 p-4 text-left opacity-60 cursor-not-allowed"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-white">LootLabs</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">Unavailable until locker URL / API token is set</p>
+                {lootlabsReady ? (
+                  <a
+                    href={lootlabsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group flex items-center justify-between rounded-2xl border border-[var(--border)] bg-black/25 px-5 py-4 transition-colors hover:border-[var(--accent)]/40"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-white">LootLabs</p>
+                      <p className="mt-0.5 text-xs text-[var(--muted)]">Tasks · returns here when postback fires</p>
+                    </div>
+                    <span className="text-[var(--accent-bright)] transition-transform group-hover:translate-x-0.5">→</span>
+                  </a>
+                ) : (
+                  <div className="rounded-2xl border border-[var(--border)] bg-black/20 px-5 py-4 opacity-55">
+                    <p className="text-sm font-semibold text-white">LootLabs</p>
+                    <p className="mt-0.5 text-xs text-[var(--muted)]">Locker not configured</p>
                   </div>
-                  <span className="text-sm text-zinc-600">—</span>
-                </button>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
+          </div>
         </section>
-      </div>
+
+        {/* Profile settings */}
+        <section className="section-rule mt-16 pt-14 animate-fade-in">
+          <p className="mono-label">Profile</p>
+          <h2 className="font-display mt-3 text-3xl font-bold text-white">Settings</h2>
+          <p className="mt-3 max-w-lg text-sm text-[var(--muted)]">
+            Display name on this account. Email is managed by your login provider.
+          </p>
+
+          <div className="mt-8 max-w-md">
+            <label className="mono-label !normal-case !tracking-wide !text-[var(--muted)]">Username</label>
+            <div className="mt-2 flex gap-2">
+              <input
+                type="text"
+                value={usernameEdit}
+                onChange={(e) => setUsernameEdit(e.target.value)}
+                className="flex-1 rounded-full border border-[var(--border-strong)] bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:border-[var(--accent)]/50 focus:outline-none"
+                placeholder="your_username"
+              />
+              <button
+                type="button"
+                onClick={handleSaveUsername}
+                disabled={saving || !usernameEdit.trim()}
+                className="btn-ghost px-5 py-2.5 text-sm disabled:opacity-40"
+              >
+                {saving ? '…' : 'Save'}
+              </button>
+            </div>
+            <p className="mt-4 text-xs text-[var(--muted)]">
+              Member since{' '}
+              {user?.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
+              {profile?.role && profile.role !== 'user' ? ` · ${profile.role}` : ''}
+            </p>
+          </div>
+        </section>
+      </main>
     </div>
   );
 }
